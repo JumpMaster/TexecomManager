@@ -1,3 +1,11 @@
+# None library project files
+mqtt.cpp
+mqtt.h
+papertrail.cpp
+papertrail.h
+publishqueue.h
+texecommanager.ino
+
 # Prerequisites
 *.d
 
