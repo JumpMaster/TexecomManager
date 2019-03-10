@@ -1,3 +1,5 @@
+// Copyright 2019 Kevin Cooper
+
 #ifndef __TEXECOM_H_
 #define __TEXECOM_H_
 
@@ -6,71 +8,70 @@
 #define texSerial Serial1
 
 class Texecom {
-public:
+ public:
+    typedef enum {
+        DISARMED = 0,
+        ARMED_HOME = 1,
+        ARMED_AWAY = 2,
+        PENDING = 3,
+        ARMING = 4,
+        TRIGGERED = 5,
+        ARMED = 6,
+        UNKNOWN = 7,
+    } ALARM_STATE;
 
-typedef enum {
-    DISARMED = 0,
-    ARMED_HOME = 1,
-    ARMED_AWAY = 2,
-    PENDING = 3,
-    ARMING = 4,
-    TRIGGERED = 5,
-    ARMED = 6,
-    UNKNOWN = 7,
-} ALARM_STATE;
+    typedef enum {
+        COMMAND_ARMED_STATE = 0,
+        COMMAND_SCREEN_STATE = 1
+    } COMMAND;
 
-typedef enum {
-    COMMAND_ARMED_STATE = 0,
-    COMMAND_SCREEN_STATE = 1
-} COMMAND;
+    typedef enum {
+        ALARM_STATE_CHANGE = 0,
+        ZONE_STATE_CHANGE = 1,
+        ALARM_TRIGGERED = 2
+    } CALLBACK_TYPE;
 
-typedef enum {
-    ALARM_STATE_CHANGE = 0,
-    ZONE_STATE_CHANGE = 1,
-    ALARM_TRIGGERED = 2
-} CALLBACK_TYPE;
+    typedef enum {
+        IDLE,
+        START,
+        CONFIRM_ARMED,
+        CONFIRM_DISARMED,
+        DISARMED_CONFIRMED,
+        CONFIRM_IDLE_SCREEN,
+        LOGIN,
+        LOGIN_WAIT,
+        WAIT_FOR_PROMPT,
+        WAIT_FOR_PART_ARM_PROMPT,
+        WAIT_FOR_NIGHT_ARM_PROMPT,
+        ARM_REQUESTED,
+        DISARM_REQUESTED
+    } OPERATION;
 
-typedef enum {
-    IDLE,
-    START,
-    CONFIRM_ARMED,
-    CONFIRM_DISARMED,
-    DISARMED_CONFIRMED,
-    CONFIRM_IDLE_SCREEN,
-    LOGIN,
-    LOGIN_WAIT,
-    WAIT_FOR_PROMPT,
-    WAIT_FOR_PART_ARM_PROMPT,
-    WAIT_FOR_NIGHT_ARM_PROMPT,
-    ARM_REQUESTED,
-    DISARM_REQUESTED
-} OPERATION;
+    typedef enum {
+        RESULT_NONE,
+        TASK_TIMEOUT,
+        IS_ARMED,
+        IS_DISARMED,
+        SCREEN_IDLE,
+        SCREEN_PART_ARMED,
+        SCREEN_FULL_ARMED,
+        SCREEN_AREA_ENTRY,
+        LOGIN_COMPLETE,
+        LOGIN_CONFIRMED,
+        FULL_ARM_PROMPT,
+        PART_ARM_PROMPT,
+        NIGHT_ARM_PROMPT,
+        DISARM_PROMPT,
+        IS_ARMING
+    } RESULT;
 
-typedef enum {
-    RESULT_NONE,
-    TASK_TIMEOUT,
-    IS_ARMED,
-    IS_DISARMED,
-    SCREEN_IDLE,
-    SCREEN_PART_ARMED,
-    SCREEN_FULL_ARMED,
-    SCREEN_AREA_ENTRY,
-    LOGIN_COMPLETE,
-    LOGIN_CONFIRMED,
-    FULL_ARM_PROMPT,
-    PART_ARM_PROMPT,
-    NIGHT_ARM_PROMPT,
-    DISARM_PROMPT,
-    IS_ARMING
-} RESULT;
+    typedef enum {
+        DISARM = 0,
+        FULL_ARM = 1,
+        NIGHT_ARM = 2
+    } TASK_TYPE;
 
-typedef enum {
-    DISARM = 0,
-    FULL_ARM = 1,
-    NIGHT_ARM = 2
-} TASK_TYPE;
-
-public:
+ public:
     Texecom(void (*callback)(CALLBACK_TYPE, int, int));
     void loop();
     void nightArm(char *code);
@@ -78,7 +79,7 @@ public:
     void disarm(char *code);
     ALARM_STATE getState() { return alarmState; }
 
-private:
+ private:
     bool allowArm = true;
     void requestArmState();
     void requestScreen();
@@ -98,20 +99,20 @@ private:
     const char *msgEntryUpdate = "\"E0";
     const char *msgArmingUpdate = "\"X0";
     const char *msgIntruderUpdate = "\"L0";
-    
+
     const char *msgUserPinLogin = "\"U0";
     const char *msgUserTagLogin = "\"T0";
-    
+
     const char *msgReplyDisarmed = "\"N";
     const char *msgReplyArmed = "\"Y";
     const char *msgWelcomeBack = "\"  Welcome Back";
     const char *msgScreenIdle = "\"  The Cooper's";
     const char *msgScreenIdlePartArmed = "\" * PART ARMED *";
-    
+
     const char *msgScreenArmedPart = "\"Part";
     const char *msgScreenArmedNight = "\"Night";
     const char *msgScreenArmedFull = "\"Area FULL ARMED";
-    
+
     const char *msgScreenQuestionArm = "\"Do you want to  Arm System?";
     const char *msgScreenQuestionPartArm = "\"Do you want to  Part Arm System?";
     const char *msgScreenQuestionNightArm = "\"Do you want:-   Night Arm";
@@ -119,47 +120,47 @@ private:
 
     const char *msgScreenAreainEntry = "\"Area in Entry";
 
-    int userCount; // This is set dynamically at class initialisation
+    int userCount;  // This is set dynamically at class initialisation
     const char *users[4] = {"root", "Kevin", "Nicki", "Mumma"};
 
     TASK_TYPE task;
     COMMAND delayedCommand;
-    unsigned long delayedCommandExecuteTime = 0;
+    uint32_t delayedCommandExecuteTime = 0;
     const char *commandStrings[2] = {"ASTATUS", "LSTATUS"};
     const int maxMessageSize = 100;
     char message[101];
     char buffer[101];
     bool messageReady = false;
     int bufferPosition;
-    
+
     bool performLogin = false;
-    
+
     OPERATION currentTask = IDLE;
 
-    unsigned long disarmStartTime;
-    const unsigned int disarmTimeout = 10000; // 10 seconds
-    
-    unsigned long armStartTime;
-    const unsigned int armTimeout = 15000; // 15 seconds
-    
+    uint32_t disarmStartTime;
+    const unsigned int disarmTimeout = 10000;  // 10 seconds
+
+    uint32_t armStartTime;
+    const unsigned int armTimeout = 15000;  // 15 seconds
+
     const int commandWaitTimeout = 2000;
-    unsigned long lastCommandTime = 0;
+    uint32_t lastCommandTime = 0;
     int commandAttempts = 0;
     const char maxRetries = 3;
-    
-    unsigned long lastStateCheck;
+
+    uint32_t lastStateCheck;
     const unsigned int stateCheckFrequency = 300000;
-    
+
     char userPin[9];
     char loginPinPosition;
-    unsigned long nextPinEntryTime;
+    uint32_t nextPinEntryTime;
     const int PIN_ENTRY_DELAY = 500;
     ALARM_STATE alarmState = UNKNOWN;
-    unsigned long lastStateChange;
+    uint32_t lastStateChange;
     const int armingTimeout = 45000;
-    
-    unsigned long messageStart;
-    
+
+    uint32_t messageStart;
+
     int triggeredZone;
 };
 
