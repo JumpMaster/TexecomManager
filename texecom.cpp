@@ -15,7 +15,7 @@ void Texecom::request(COMMAND command) {
     lastCommandTime = millis();
 }
 
-void Texecom::disarm(char *code) {
+void Texecom::disarm(const char *code) {
     if (currentTask != IDLE) {
         Log.info("DISARMING: Request already in progress");
         return;
@@ -29,7 +29,7 @@ void Texecom::disarm(char *code) {
     disarmSystem(RESULT_NONE);
 }
 
-void Texecom::nightArm(char *code) {
+void Texecom::arm(const char *code, ARM_TYPE type) {
     if (currentTask != IDLE) {
         Log.info("ARMING: Request already in progress");
         return;
@@ -38,21 +38,8 @@ void Texecom::nightArm(char *code) {
         snprintf(userPin, sizeof(userPin), code);
     else
         return;
-    task = NIGHT_ARM;
-    currentTask = START;
-    armSystem(RESULT_NONE);
-}
-
-void Texecom::fullArm(char *code) {
-    if (currentTask != IDLE) {
-        Log.info("ARMING: Request already in progress");
-        return;
-    }
-    if (strlen(code) <= 8)
-        snprintf(userPin, sizeof(userPin), code);
-    else
-        return;
-    task = FULL_ARM;
+    armType = type;
+    task = ARM;
     currentTask = START;
     armSystem(RESULT_NONE);
 }
@@ -117,7 +104,7 @@ void Texecom::processTask(RESULT result) {
     if (result == TASK_TIMEOUT)
         Log.info("processTask: Task timed out");
 
-    if (task == NIGHT_ARM || task == FULL_ARM) {
+    if (task == ARM) {
         armSystem(result);
     } else if (task == DISARM) {
         disarmSystem(result);
@@ -191,7 +178,7 @@ void Texecom::disarmSystem(RESULT result) {
         case WAIT_FOR_PROMPT :
             if (result == DISARM_PROMPT) {
                 Log.info("DISARMING: Disarm prompt confirmed, disarming");
-                if (allowArm)
+                if (!debugMode)
                     texSerial.println("KEYY");  // Yes
 
                 currentTask = DISARM_REQUESTED;
@@ -221,9 +208,9 @@ void Texecom::disarmSystem(RESULT result) {
 void Texecom::armSystem(RESULT result) {
     switch (currentTask) {
         case START :  // Initiate request
-            if (task == FULL_ARM)
+            if (armType == FULL_ARM)
                 Log.info("ARMING: Starting full arm process");
-            else if (task == NIGHT_ARM)
+            else if (armType == NIGHT_ARM)
                 Log.info("ARMING: Starting night arm process");
             else
                 return;
@@ -281,12 +268,12 @@ void Texecom::armSystem(RESULT result) {
 
         case WAIT_FOR_PROMPT :
             if (result == FULL_ARM_PROMPT) {
-                if (task == FULL_ARM) {
+                if (armType == FULL_ARM) {
                     Log.info("ARMING: Full arm prompt confirmed, completing full arm");
-                    if (allowArm)
+                    if (!debugMode)
                         texSerial.println("KEYY");  // Yes
                     currentTask = ARM_REQUESTED;
-                } else if (task == NIGHT_ARM) {
+                } else if (armType == NIGHT_ARM) {
                     Log.info("ARMING: Full arm prompt confirmed, waiting for part arm prompt");
                     currentTask = WAIT_FOR_PART_ARM_PROMPT;
                     texSerial.println("KEYD");  // Down
@@ -313,7 +300,7 @@ void Texecom::armSystem(RESULT result) {
         case WAIT_FOR_NIGHT_ARM_PROMPT :
             if (result == NIGHT_ARM_PROMPT) {
                 Log.info("ARMING: Night arm prompt confirmed, Completing part arm");
-                if (allowArm)
+                if (!debugMode)
                     texSerial.println("KEYY");  // Yes
                 currentTask = ARM_REQUESTED;
             } else {

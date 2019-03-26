@@ -67,20 +67,26 @@ class Texecom {
 
     typedef enum {
         DISARM = 0,
-        FULL_ARM = 1,
-        NIGHT_ARM = 2
+        ARM = 1
     } TASK_TYPE;
+    
+    typedef enum {
+        FULL_ARM = 0,
+        NIGHT_ARM = 1
+    } ARM_TYPE;
 
  public:
     Texecom(void (*callback)(CALLBACK_TYPE, int, int));
     void loop();
-    void nightArm(char *code);
-    void fullArm(char *code);
-    void disarm(char *code);
+    void nightArm(const char *code);
+    void fullArm(const char *code);
+    void disarm(const char *code);
+    void arm(const char *code, ARM_TYPE type);
+    void setDebug(bool enabled) { debugMode = enabled; }
     ALARM_STATE getState() { return alarmState; }
 
  private:
-    bool allowArm = true;
+    bool debugMode = false;
     void requestArmState();
     void requestScreen();
     void processTask(RESULT result);
@@ -124,6 +130,7 @@ class Texecom {
     const char *users[4] = {"root", "Kevin", "Nicki", "Mumma"};
 
     TASK_TYPE task;
+    ARM_TYPE armType;
     COMMAND delayedCommand;
     uint32_t delayedCommandExecuteTime = 0;
     const char *commandStrings[2] = {"ASTATUS", "LSTATUS"};

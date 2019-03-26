@@ -6,6 +6,13 @@ papertrail.h
 publishqueue.h
 texecommanager.ino
 
+# Visual Studio Code
+.vscode
+project.properties
+
+# Particle Compiled Firmware
+*.bin
+
 # Prerequisites
 *.d
 
