@@ -2,7 +2,7 @@
 
 #include "texecom.h"
 
-Texecom::Texecom(void (*callback)(CALLBACK_TYPE, int, int)) {
+Texecom::Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t)) {
     texSerial.begin(19200, SERIAL_8N1);  // open serial communications
 
     this->callback = callback;
@@ -72,27 +72,28 @@ void Texecom::updateAlarmState(ALARM_STATE state) {
         triggeredZone = 0;
 
     if (state == TRIGGERED && triggeredZone != 0)
-            callback(ALARM_TRIGGERED, NULL, triggeredZone);
+            callback(ALARM_TRIGGERED, 0, triggeredZone);
 
     lastStateChange = millis();
     alarmState = state;
-    callback(ALARM_STATE_CHANGE, NULL, alarmState);
+    callback(ALARM_STATE_CHANGE, 0, alarmState);
 }
 
 void Texecom::updateZoneState(char *message) {
-    int zone;
-    int state;
+    uint8_t zone;
+    uint8_t state;
 
     char zoneChar[4];
     memcpy(zoneChar, &message[2], 3);
     zoneChar[3] = '\0';
     zone = atoi(zoneChar);
 
-    if ((alarmState == PENDING || alarmState == TRIGGERED) && triggeredZone == 0) {
+    if ((alarmState == PENDING || alarmState == TRIGGERED) &&
+        triggeredZone == 0) {
         triggeredZone = zone;
 
         if (alarmState == TRIGGERED)
-            callback(ALARM_TRIGGERED, NULL, triggeredZone);
+            callback(ALARM_TRIGGERED, 0, triggeredZone);
     }
 
     state = message[5] - '0';
@@ -383,7 +384,7 @@ void Texecom::loop() {
     }
 
     if (messageReady) {
-        int messageLength = strlen(message);
+        char messageLength = strlen(message);
         Log.info(message);
 
         if (message[0] == '"') {
@@ -495,9 +496,13 @@ void Texecom::loop() {
                     processTask(SCREEN_AREA_ENTRY);
             } else {
                 Log.info(String::format("Unknown texecom command - %s", message));
+                if (currentTask != IDLE)
+                    processTask(UNKNOWN_MESSAGE);
             }
         } else {
             Log.info(String::format("Unknown non-texecom command - %s", message));
+            if (currentTask != IDLE)
+                    processTask(UNKNOWN_MESSAGE);
         }
         messageReady = false;
     }

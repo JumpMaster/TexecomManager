@@ -62,7 +62,8 @@ class Texecom {
         PART_ARM_PROMPT,
         NIGHT_ARM_PROMPT,
         DISARM_PROMPT,
-        IS_ARMING
+        IS_ARMING,
+        UNKNOWN_MESSAGE
     } RESULT;
 
     typedef enum {
@@ -76,7 +77,7 @@ class Texecom {
     } ARM_TYPE;
 
  public:
-    Texecom(void (*callback)(CALLBACK_TYPE, int, int));
+    Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t));
     void loop();
     void nightArm(const char *code);
     void fullArm(const char *code);
@@ -94,7 +95,7 @@ class Texecom {
     void disarmSystem(RESULT result);
     void abortTask();
     void request(COMMAND command);
-    void (*callback)(CALLBACK_TYPE, int, int);
+    void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t);
     void delayCommand(COMMAND command, int delay);
     void updateAlarmState(ALARM_STATE alarmState);
     void updateZoneState(char *message);
@@ -126,7 +127,7 @@ class Texecom {
 
     const char *msgScreenAreainEntry = "\"Area in Entry";
 
-    int userCount;  // This is set dynamically at class initialisation
+    uint8_t userCount;  // This is set dynamically at class initialisation
     const char *users[4] = {"root", "Kevin", "Nicki", "Mumma"};
 
     TASK_TYPE task;
@@ -134,11 +135,11 @@ class Texecom {
     COMMAND delayedCommand;
     uint32_t delayedCommandExecuteTime = 0;
     const char *commandStrings[2] = {"ASTATUS", "LSTATUS"};
-    const int maxMessageSize = 100;
+    const uint8_t maxMessageSize = 100;
     char message[101];
     char buffer[101];
     bool messageReady = false;
-    int bufferPosition;
+    uint8_t bufferPosition;
 
     bool performLogin = false;
 
@@ -153,13 +154,13 @@ class Texecom {
     const int commandWaitTimeout = 2000;
     uint32_t lastCommandTime = 0;
     int commandAttempts = 0;
-    const char maxRetries = 3;
+    const uint8_t maxRetries = 3;
 
     uint32_t lastStateCheck;
     const unsigned int stateCheckFrequency = 300000;
 
     char userPin[9];
-    char loginPinPosition;
+    uint8_t loginPinPosition;
     uint32_t nextPinEntryTime;
     const int PIN_ENTRY_DELAY = 500;
     ALARM_STATE alarmState = UNKNOWN;
@@ -168,7 +169,7 @@ class Texecom {
 
     uint32_t messageStart;
 
-    int triggeredZone;
+    uint8_t triggeredZone = 0;
 };
 
 #endif  // __TEXECOM_H_

@@ -4,13 +4,14 @@ mqtt.h
 papertrail.cpp
 papertrail.h
 publishqueue.h
-texecommanager.ino
+texecommanager.cpp
 
 # Visual Studio Code
 .vscode
 project.properties
 
 # Particle Compiled Firmware
+target/ 
 *.bin
 
 # Prerequisites
