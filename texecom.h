@@ -56,6 +56,7 @@ class Texecom {
         SCREEN_PART_ARMED,
         SCREEN_FULL_ARMED,
         SCREEN_AREA_ENTRY,
+        SCREEN_AREA_EXIT,
         LOGIN_COMPLETE,
         LOGIN_CONFIRMED,
         FULL_ARM_PROMPT,
@@ -126,6 +127,7 @@ class Texecom {
     const char *msgScreenQuestionDisarm = "\"Do you want to  Disarm System?";
 
     const char *msgScreenAreainEntry = "\"Area in Entry";
+    const char *msgScreenAreainExit = "\"Area in Exit >";
 
     uint8_t userCount;  // This is set dynamically at class initialisation
     const char *users[4] = {"root", "Kevin", "Nicki", "Mumma"};
