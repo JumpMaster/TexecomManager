@@ -313,6 +313,7 @@ void Texecom::armSystem(RESULT result) {
                 currentTask = IDLE;
                 memset(userPin, 0, sizeof userPin);
                 armStartTime = 0;
+                delayCommand(COMMAND_SCREEN_STATE, 2500);
             } else {
                 Log.info("ARMING: Unexpected result at ARM_REQUESTED. Aborting");
                 abortTask();
@@ -490,6 +491,16 @@ void Texecom::loop() {
                        strncmp(message, msgScreenAreainEntry, strlen(msgScreenAreainEntry)) == 0) {
                 if (currentTask != IDLE)
                     processTask(SCREEN_AREA_ENTRY);
+            } else if (messageLength >= strlen(msgScreenAreainExit) &&
+                strncmp(message, msgScreenAreainExit, strlen(msgScreenAreainExit)) == 0) {
+                if (currentTask != IDLE)
+                    processTask(SCREEN_AREA_EXIT);
+            // Fails to arm. e.g.
+            // Zone 012 Active Garage Door
+            } else if (messageLength >= 17 &&
+                       strncmp(message, "Zone", 4) == 0 &&
+                       (strstr(message, "Active") - message) == 9) {
+                requestArmState();
             } else {
                 Log.info(String::format("Unknown texecom command - %s", message));
                 if (currentTask != IDLE)
