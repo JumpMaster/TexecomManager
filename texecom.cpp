@@ -4,9 +4,7 @@
 
 Texecom::Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t)) {
     texSerial.begin(19200, SERIAL_8N1);  // open serial communications
-
     this->callback = callback;
-
     userCount = sizeof(users) / sizeof(char*);
 }
 
@@ -148,7 +146,6 @@ void Texecom::disarmSystem(RESULT result) {
                 abortTask();
             }
             break;
-
 
         case LOGIN:
             if (result == LOGIN_COMPLETE) {
@@ -429,7 +426,6 @@ void Texecom::loop() {
 
                 if (currentTask != IDLE)
                     processTask(LOGIN_CONFIRMED);
-
             // Reply to ASTATUS request that the system is disarmed
             } else if (messageLength == 5 &&
                        strncmp(message, msgReplyDisarmed, strlen(msgReplyDisarmed)) == 0) {

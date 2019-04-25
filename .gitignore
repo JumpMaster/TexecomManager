@@ -1,10 +1,5 @@
 # None library project files
-mqtt.cpp
-mqtt.h
-papertrail.cpp
-papertrail.h
-publishqueue.h
-texecommanager.cpp
+secrets.h
 
 # Visual Studio Code
 .vscode
@@ -13,6 +8,7 @@ project.properties
 # Particle Compiled Firmware
 target/ 
 *.bin
+src/
 
 # Prerequisites
 *.d
