@@ -47,7 +47,7 @@ sample code bearing this copyright.
 #ifndef __MQTT_H_
 #define __MQTT_H_
 
-#include "application.h"
+#include "Particle.h"
 #include "spark_wiring_string.h"
 #include "spark_wiring_tcpclient.h"
 #include "spark_wiring_usbserial.h"

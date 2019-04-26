@@ -1,6 +1,6 @@
 #pragma once
 
-#include "application.h"
+#include "Particle.h"
 
 #if (SYSTEM_VERSION < SYSTEM_VERSION_v061)
 #error This library requires FW version 0.6.1 and above.

@@ -3,7 +3,7 @@
 #ifndef __TEXECOM_H_
 #define __TEXECOM_H_
 
-#include "application.h"
+#include "Particle.h"
 
 #define texSerial Serial1
 
@@ -80,8 +80,6 @@ class Texecom {
  public:
     Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t));
     void loop();
-    void nightArm(const char *code);
-    void fullArm(const char *code);
     void disarm(const char *code);
     void arm(const char *code, ARM_TYPE type);
     void setDebug(bool enabled) { debugMode = enabled; }

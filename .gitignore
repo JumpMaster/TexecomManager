@@ -8,7 +8,6 @@ project.properties
 # Particle Compiled Firmware
 target/ 
 *.bin
-src/
 
 # Prerequisites
 *.d

@@ -391,11 +391,11 @@ void Texecom::loop() {
                 strncmp(message, msgZoneUpdate, strlen(msgZoneUpdate)) == 0) {
                 updateZoneState(message);
             // System Armed
-            } else if (messageLength == 6 &&
+            } else if (messageLength >= 6 &&
                        strncmp(message, msgArmUpdate, strlen(msgArmUpdate)) == 0) {
                 updateAlarmState(ARMED);
             // System Disarmed
-            } else if (messageLength == 6 &&
+            } else if (messageLength >= 6 &&
                        strncmp(message, msgDisarmUpdate, strlen(msgDisarmUpdate)) == 0) {
                 if (currentTask != IDLE)
                     processTask(IS_DISARMED);

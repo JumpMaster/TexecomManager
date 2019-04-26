@@ -3,8 +3,15 @@
 #include "texecom.h"
 #include "mqtt.h"
 #include "papertrail.h"
-#include "application.h"
+#include "Particle.h"
 #include "secrets.h"
+
+// Stubs
+void mqttCallback(char* topic, byte* payload, unsigned int length);
+void sendTriggeredMessage(uint8_t triggeredZone);
+void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state);
+void updateAlarmState(Texecom::ALARM_STATE newState);
+void updateZoneState(uint8_t zone, uint8_t state);
 
 ApplicationWatchdog wd(60000, System.reset);
 
@@ -13,22 +20,14 @@ uint32_t lastMqttConnectAttempt;
 const int mqttConnectAtemptTimeout1 = 5000;
 const int mqttConnectAtemptTimeout2 = 30000;
 unsigned int mqttConnectionAttempts;
-
 bool mqttStateConfirmed = true;
-
-void alarmCallback(Texecom::CALLBACK_TYPE callbackType, int zone, int state);
-void updateAlarmState(Texecom::ALARM_STATE newState);
-
 Texecom alarm(alarmCallback);
-
 uint32_t resetTime = 0;
-
-char code[9];
-uint32_t codeClearTimer;
+bool isDebug = false;
 
 PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort, "Texecom");
 
-void alarmCallback(Texecom::CALLBACK_TYPE callbackType, int zone, int state) {
+void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state) {
     if (callbackType == Texecom::ZONE_STATE_CHANGE) {
         updateZoneState(zone, state);
     } else if (callbackType == Texecom::ALARM_STATE_CHANGE) {
@@ -51,23 +50,26 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     memcpy(p, payload, length);
     p[length] = '\0';
 
-    if (strcmp(topic, "home/security/alarm/code") == 0) {
-        if (strlen(p) >= 4 && strlen(p) <= 8 && digitsOnly(p))
-            snprintf(code, sizeof(code), p);
-            codeClearTimer = millis() + 1000;
+    if (strcmp(topic, "home/security/alarm/set") == 0) {
 
-    } else if (strcmp(topic, "home/security/alarm/set") == 0) {
-        if (strlen(code) >= 4) {
-            if (strcmp(p, "arm_away") == 0) {
-                alarm.fullArm(code);
-            } else if (strcmp(p, "arm_night") == 0) {
-                alarm.nightArm(code);
-            } else if (strcmp(p, "disarm") == 0) {
+        const char *action = strtok(p, ":");
+        const char *code = strtok(NULL, ":");
+    
+        if (strlen(code) >= 4 && digitsOnly(code)) {
+            if (strcmp(action, "arm_away") == 0) {
+                alarm.arm(code, Texecom::FULL_ARM);
+            } else if (
+                        strcmp(action, "arm_night") == 0 ||
+                        strcmp(action, "arm_home") == 0
+                      ) {
+                alarm.arm(code, Texecom::NIGHT_ARM);
+            } else if (strcmp(action, "disarm") == 0) {
                 alarm.disarm(code);
             }
         } else {
-            Log.info("Command received but code is empty");
+            Log.error("Command received but code is < 4 char");
         }
+        
     } else if (strcmp(topic, "home/security/alarm/state") == 0) {
         if (alarm.getState() != Texecom::UNKNOWN) {
             if (strcmp(alarmStateStrings[alarm.getState()], p) == 0)
@@ -78,7 +80,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
 }
 
-void sendTriggeredMessage(int triggeredZone) {
+void sendTriggeredMessage(uint8_t triggeredZone) {
     char charData[22];
     snprintf(charData, sizeof(charData), "Triggered by zone %d", triggeredZone);
     Log.info(charData);
@@ -99,11 +101,11 @@ void updateAlarmState(Texecom::ALARM_STATE newState) {
     if (newState != Texecom::ARMED) {  // Update Home-Assistant
         mqttStateConfirmed = false;
         if (mqttClient.isConnected())
-            mqttClient.publish("home/security/alarm/state", alarmStateStrings[newState], MQTT::QOS1, true);
+            mqttClient.publish("home/security/alarm/state", alarmStateStrings[newState], MQTT::QOS2, true);
     }
 }
 
-void updateZoneState(int zone, int state) {
+void updateZoneState(uint8_t zone, uint8_t state) {
     char mqttData[29];
     snprintf(mqttData, sizeof(mqttData), "home/security/zone/%03d/state", zone);
 
@@ -113,6 +115,18 @@ void updateZoneState(int zone, int state) {
 
     if (mqttClient.isConnected())
         mqttClient.publish(mqttData, zoneState, true);
+}
+
+int setDebug(const char *data) {
+    if (strcmp(data, "true") == 0) {
+        isDebug = true;
+    } else {
+        isDebug = false;
+    }
+    
+    alarm.setDebug(isDebug);
+    
+    return 0;
 }
 
 void connectToMQTT() {
@@ -144,6 +158,8 @@ void setup() {
     connectToMQTT();
 
     uint32_t resetReasonData = System.resetReasonData();
+    Particle.function("setDebug", setDebug);
+    Particle.variable("isDebug", isDebug);
     Particle.publish("pushover", String::format("Alarm: I am awake!: %d-%d", System.resetReason(), resetReasonData), PRIVATE);
 }
 
@@ -153,11 +169,6 @@ void loop() {
     } else if ((mqttConnectionAttempts < 5 && millis() > (lastMqttConnectAttempt + mqttConnectAtemptTimeout1)) ||
                  millis() > (lastMqttConnectAttempt + mqttConnectAtemptTimeout2)) {
         connectToMQTT();
-    }
-
-    if (codeClearTimer > 0 && millis() > codeClearTimer) {
-        codeClearTimer = 0;
-        memset(code, 0, sizeof code);
     }
 
     alarm.loop();
