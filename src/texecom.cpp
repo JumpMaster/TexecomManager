@@ -70,7 +70,7 @@ void Texecom::updateAlarmState(ALARM_STATE state) {
         triggeredZone = 0;
 
     if (state == TRIGGERED && triggeredZone != 0)
-            callback(ALARM_TRIGGERED, 0, triggeredZone);
+            callback(ALARM_TRIGGERED, triggeredZone, 0);
 
     lastStateChange = millis();
     alarmState = state;

@@ -21,7 +21,7 @@ const int mqttConnectAtemptTimeout1 = 5000;
 const int mqttConnectAtemptTimeout2 = 30000;
 unsigned int mqttConnectionAttempts;
 bool mqttStateConfirmed = true;
-Texecom alarm(alarmCallback);
+Texecom texecom(alarmCallback);
 uint32_t resetTime = 0;
 bool isDebug = false;
 
@@ -57,36 +57,38 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     
         if (strlen(code) >= 4 && digitsOnly(code)) {
             if (strcmp(action, "arm_away") == 0) {
-                alarm.arm(code, Texecom::FULL_ARM);
+                texecom.arm(code, Texecom::FULL_ARM);
             } else if (
                         strcmp(action, "arm_night") == 0 ||
                         strcmp(action, "arm_home") == 0
                       ) {
-                alarm.arm(code, Texecom::NIGHT_ARM);
+                texecom.arm(code, Texecom::NIGHT_ARM);
             } else if (strcmp(action, "disarm") == 0) {
-                alarm.disarm(code);
+                texecom.disarm(code);
             }
         } else {
             Log.error("Command received but code is < 4 char");
         }
         
     } else if (strcmp(topic, "home/security/alarm/state") == 0) {
-        if (alarm.getState() != Texecom::UNKNOWN) {
-            if (strcmp(alarmStateStrings[alarm.getState()], p) == 0)
+        if (texecom.getState() != Texecom::UNKNOWN) {
+            if (strcmp(alarmStateStrings[texecom.getState()], p) == 0)
                 mqttStateConfirmed = true;
             else
-                updateAlarmState(alarm.getState());
+                updateAlarmState(texecom.getState());
         }
     }
 }
 
 void sendTriggeredMessage(uint8_t triggeredZone) {
-    char charData[22];
+    char charData[100];
     snprintf(charData, sizeof(charData), "Triggered by zone %d", triggeredZone);
     Log.info(charData);
 
-    if (triggeredZone >= 10 && mqttClient.isConnected())
-        mqttClient.publish("home/security/alarm/trigger", alarmZoneStrings[triggeredZone-10], true);
+    if (triggeredZone >= 10 && mqttClient.isConnected()) {
+        snprintf(charData, sizeof(charData), "Triggered by zone %s", alarmZoneStrings[triggeredZone-10]);
+        mqttClient.publish("home/notification/high", charData, true);
+    }
 }
 
 void updateAlarmState(Texecom::ALARM_STATE newState) {
@@ -124,7 +126,7 @@ int setDebug(const char *data) {
         isDebug = false;
     }
     
-    alarm.setDebug(isDebug);
+    texecom.setDebug(isDebug);
     
     return 0;
 }
@@ -171,6 +173,6 @@ void loop() {
         connectToMQTT();
     }
 
-    alarm.loop();
+    texecom.loop();
     wd.checkin();  // resets the AWDT count
 }
