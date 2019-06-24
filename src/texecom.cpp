@@ -517,6 +517,7 @@ void Texecom::loop() {
                 if (screenRequestRetryCount < 3) {
                     if (currentTask == CONFIRM_ARMED || currentTask == CONFIRM_DISARMED) {
                         screenRequestRetryCount++;
+                        Log.info("Retrying arm state request");
                         requestArmState();
                     } else if (currentTask == CONFIRM_IDLE_SCREEN ||
                                currentTask == WAIT_FOR_ARM_PROMPT ||
@@ -524,6 +525,7 @@ void Texecom::loop() {
                                currentTask == WAIT_FOR_PART_ARM_PROMPT ||
                                currentTask == WAIT_FOR_NIGHT_ARM_PROMPT) {
                         screenRequestRetryCount++;
+                        Log.info("Retrying screen request");
                         requestScreen();
                     }
                 } else {
