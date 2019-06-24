@@ -278,7 +278,7 @@ void Texecom::armSystem(RESULT result) {
                     delayCommand(COMMAND_SCREEN_STATE, 500);
                 }
             } else {
-                Log.info("ARMING: Unexpected result at WAIT_FOR_PROMPT. Aborting");
+                Log.info("ARMING: Unexpected result at WAIT_FOR_ARM_PROMPT. Aborting");
                 abortTask();
             }
             break;
@@ -472,7 +472,8 @@ void Texecom::loop() {
         // Shown directly after user logs in
         } else if (messageLength > strlen(msgWelcomeBack) &&
                     strncmp(message, msgWelcomeBack, strlen(msgWelcomeBack)) == 0) {
-            if (currentTask == WAIT_FOR_PROMPT)
+            if (currentTask == WAIT_FOR_DISARM_PROMPT ||
+                    currentTask == WAIT_FOR_ARM_PROMPT)
                 delayCommand(COMMAND_SCREEN_STATE, 500);
         // Shown shortly after user logs in
         } else if (messageLength >= strlen(msgScreenQuestionArm) &&
@@ -518,7 +519,8 @@ void Texecom::loop() {
                         screenRequestRetryCount++;
                         requestArmState();
                     } else if (currentTask == CONFIRM_IDLE_SCREEN ||
-                               currentTask == WAIT_FOR_PROMPT ||
+                               currentTask == WAIT_FOR_ARM_PROMPT ||
+                               currentTask == WAIT_FOR_DISARM_PROMPT ||
                                currentTask == WAIT_FOR_PART_ARM_PROMPT ||
                                currentTask == WAIT_FOR_NIGHT_ARM_PROMPT) {
                         screenRequestRetryCount++;
