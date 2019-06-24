@@ -70,7 +70,7 @@ void Texecom::updateAlarmState(ALARM_STATE state) {
         triggeredZone = 0;
 
     if (state == TRIGGERED && triggeredZone != 0)
-            callback(ALARM_TRIGGERED, 0, triggeredZone);
+            callback(ALARM_TRIGGERED, triggeredZone, 0);
 
     lastStateChange = millis();
     alarmState = state;
@@ -161,7 +161,7 @@ void Texecom::disarmSystem(RESULT result) {
             if (result == LOGIN_CONFIRMED) {
                 if (alarmState != PENDING) {
                     Log.info("DISARMING: Login confirmed. Waiting for Disarm prompt");
-                    currentTask = WAIT_FOR_PROMPT;
+                    currentTask = WAIT_FOR_DISARM_PROMPT;
                     delayCommand(COMMAND_SCREEN_STATE, 500);
                 } else {
                     Log.info("DISARMING: Login confirmed. Waiting for Disarm confirmation");
@@ -173,7 +173,7 @@ void Texecom::disarmSystem(RESULT result) {
             }
             break;
 
-        case WAIT_FOR_PROMPT :
+        case WAIT_FOR_DISARM_PROMPT :
             if (result == DISARM_PROMPT) {
                 Log.info("DISARMING: Disarm prompt confirmed, disarming");
                 if (!debugMode)
@@ -181,7 +181,7 @@ void Texecom::disarmSystem(RESULT result) {
 
                 currentTask = DISARM_REQUESTED;
             } else {
-                Log.info("DISARMING: Unexpected result at WAIT_FOR_PROMPT. Aborting");
+                Log.info("DISARMING: Unexpected result at WAIT_FOR_DISARM_PROMPT. Aborting");
                 abortTask();
             }
             break;
@@ -256,7 +256,7 @@ void Texecom::armSystem(RESULT result) {
         case LOGIN_WAIT :
             if (result == LOGIN_CONFIRMED) {
                 Log.info("ARMING: Login confirmed. Waiting for Arm prompt");
-                currentTask = WAIT_FOR_PROMPT;
+                currentTask = WAIT_FOR_ARM_PROMPT;
                 delayCommand(COMMAND_SCREEN_STATE, 500);
             } else {
                 Log.info("ARMING: Login failed to confirm. Aborting");
@@ -264,7 +264,7 @@ void Texecom::armSystem(RESULT result) {
             }
             break;
 
-        case WAIT_FOR_PROMPT :
+        case WAIT_FOR_ARM_PROMPT :
             if (result == FULL_ARM_PROMPT) {
                 if (armType == FULL_ARM) {
                     Log.info("ARMING: Full arm prompt confirmed, completing full arm");
@@ -570,8 +570,10 @@ void Texecom::loop() {
         processTask(TASK_TIMEOUT);
     }
 
-    if ((currentTask == CONFIRM_IDLE_SCREEN || currentTask == WAIT_FOR_PROMPT || currentTask == WAIT_FOR_PART_ARM_PROMPT || currentTask == WAIT_FOR_NIGHT_ARM_PROMPT)
-            && bufferPosition == 0 && delayedCommandExecuteTime == 0 && millis() > (lastCommandTime+commandWaitTimeout) && commandAttempts < maxRetries) {
+    if ((currentTask == CONFIRM_IDLE_SCREEN || currentTask == WAIT_FOR_ARM_PROMPT ||
+        currentTask == WAIT_FOR_DISARM_PROMPT || currentTask == WAIT_FOR_PART_ARM_PROMPT ||
+        currentTask == WAIT_FOR_NIGHT_ARM_PROMPT)
+        && bufferPosition == 0 && delayedCommandExecuteTime == 0 && millis() > (lastCommandTime+commandWaitTimeout) && commandAttempts < maxRetries) {
         Log.info("commandWaitTimeout: Retrying request screen");
         commandAttempts++;
         requestScreen();
