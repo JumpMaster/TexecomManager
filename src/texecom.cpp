@@ -341,6 +341,9 @@ void Texecom::abortTask() {
 }
 
 void Texecom::loop() {
+    bool messageReady = false;
+    bool messageComplete = true;
+
     // Read incoming serial data if available and copy to TCP port
     while (texSerial.available() > 0) {
         int incomingByte = texSerial.read();
@@ -368,6 +371,7 @@ void Texecom::loop() {
             memcpy(message, buffer, bufferPosition);
             message[bufferPosition] = '\0';
             messageReady = true;
+            screenRequestRetryCount = 0;
             bufferPosition = 0;
             break;
         }
@@ -378,6 +382,7 @@ void Texecom::loop() {
         memcpy(message, buffer, bufferPosition);
         message[bufferPosition] = '\0';
         messageReady = true;
+        messageComplete = false;
         bufferPosition = 0;
     }
 
@@ -385,135 +390,146 @@ void Texecom::loop() {
         char messageLength = strlen(message);
         Log.info(message);
 
-        if (message[0] == '"') {
-            // Zone state changed
-            if (messageLength == 6 &&
-                strncmp(message, msgZoneUpdate, strlen(msgZoneUpdate)) == 0) {
-                updateZoneState(message);
-            // System Armed
-            } else if (messageLength >= 6 &&
-                       strncmp(message, msgArmUpdate, strlen(msgArmUpdate)) == 0) {
-                updateAlarmState(ARMED);
-            // System Disarmed
-            } else if (messageLength >= 6 &&
-                       strncmp(message, msgDisarmUpdate, strlen(msgDisarmUpdate)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(IS_DISARMED);
-                updateAlarmState(DISARMED);
-            // Entry while armed
-            } else if (messageLength == 6 &&
-                       strncmp(message, msgEntryUpdate, strlen(msgEntryUpdate)) == 0) {
-                updateAlarmState(PENDING);
-            // System arming
-            } else if (messageLength == 6 &&
-                       strncmp(message, msgArmingUpdate, strlen(msgArmingUpdate)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(IS_ARMING);
-                updateAlarmState(ARMING);
-            // Intruder
-            } else if (messageLength == 6 &&
-                       strncmp(message, msgIntruderUpdate, strlen(msgIntruderUpdate)) == 0) {
-                updateAlarmState(TRIGGERED);
-            // User logged in with code or tag
-            } else if (messageLength == 6 &&
-                       (strncmp(message, msgUserPinLogin, strlen(msgUserPinLogin)) == 0 ||
-                       strncmp(message, msgUserTagLogin, strlen(msgUserTagLogin)) == 0)) {
-                int user = message[4] - '0';
-
-                if (user < userCount)
-                    Log.info("User logged in: %s", users[user]);
-                else
-                    Log.info("User logged in: Outside of user array size");
-
-                if (currentTask != IDLE)
-                    processTask(LOGIN_CONFIRMED);
-            // Reply to ASTATUS request that the system is disarmed
-            } else if (messageLength == 5 &&
-                       strncmp(message, msgReplyDisarmed, strlen(msgReplyDisarmed)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(IS_DISARMED);
-                else
-                    updateAlarmState(DISARMED);
-            // Reply to ASTATUS request that the system is armed
-            } else if (messageLength == 5 &&
-                       strncmp(message, msgReplyArmed, strlen(msgReplyArmed)) == 0) {
-                if (currentTask != IDLE) {
-                    processTask(IS_ARMED);
-                } else {
-                    updateAlarmState(ARMED);
-                }
-            } else if (
-                    (messageLength >= strlen(msgScreenArmedPart) &&
-                     strncmp(message, msgScreenArmedPart, strlen(msgScreenArmedPart)) == 0) ||
-                    (messageLength >= strlen(msgScreenArmedNight) &&
-                     strncmp(message, msgScreenArmedNight, strlen(msgScreenArmedNight)) == 0) ||
-                    (messageLength >= strlen(msgScreenIdlePartArmed) &&
-                     strncmp(message, msgScreenIdlePartArmed, strlen(msgScreenIdlePartArmed)) == 0)) {
-                if (currentTask != IDLE)
-                    processTask(SCREEN_PART_ARMED);
-                else
-                    updateAlarmState(ARMED_HOME);
-            } else if (messageLength >= strlen(msgScreenArmedFull) &&
-                       strncmp(message, msgScreenArmedFull, strlen(msgScreenArmedFull)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(SCREEN_FULL_ARMED);
-                else
-                    updateAlarmState(ARMED_AWAY);
-            } else if (messageLength >= strlen(msgScreenIdle) &&
-                       strncmp(message, msgScreenIdle, strlen(msgScreenIdle)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(SCREEN_IDLE);
-                else if (alarmState == ARMED)
-                    updateAlarmState(ARMED_AWAY);
-            // Shown directly after user logs in
-            } else if (messageLength > strlen(msgWelcomeBack) &&
-                       strncmp(message, msgWelcomeBack, strlen(msgWelcomeBack)) == 0) {
-                if (currentTask == WAIT_FOR_PROMPT)
-                    delayCommand(COMMAND_SCREEN_STATE, 500);
-            // Shown shortly after user logs in
-            } else if (messageLength >= strlen(msgScreenQuestionArm) &&
-                       strncmp(message, msgScreenQuestionArm, strlen(msgScreenQuestionArm)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(FULL_ARM_PROMPT);
-            } else if (messageLength >= strlen(msgScreenQuestionPartArm) &&
-                       strncmp(message, msgScreenQuestionPartArm, strlen(msgScreenQuestionPartArm)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(PART_ARM_PROMPT);
-            } else if (messageLength >= strlen(msgScreenQuestionNightArm) &&
-                       strncmp(message, msgScreenQuestionNightArm, strlen(msgScreenQuestionNightArm)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(NIGHT_ARM_PROMPT);
-            } else if (messageLength >= strlen(msgScreenQuestionDisarm) &&
-                       strncmp(message, msgScreenQuestionDisarm, strlen(msgScreenQuestionDisarm)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(DISARM_PROMPT);
-            } else if (messageLength >= strlen(msgScreenAreainEntry) &&
-                       strncmp(message, msgScreenAreainEntry, strlen(msgScreenAreainEntry)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(SCREEN_AREA_ENTRY);
-            } else if (messageLength >= strlen(msgScreenAreainExit) &&
-                strncmp(message, msgScreenAreainExit, strlen(msgScreenAreainExit)) == 0) {
-                if (currentTask != IDLE)
-                    processTask(SCREEN_AREA_EXIT);
-            // Fails to arm. e.g.
-            // Zone 012 Active Garage Door
-            } else if (messageLength >= 17 &&
-                       strncmp(message, "Zone", 4) == 0 &&
-                       (strstr(message, "Active") - message) == 9) {
-                requestArmState();
-            } else {
-                Log.info(String::format("Unknown texecom command - %s", message));
-                if (currentTask != IDLE)
-                    processTask(UNKNOWN_MESSAGE);
-            }
-        } else {
-            Log.info(String::format("Unknown non-texecom command - %s", message));
+        // Zone state changed
+        if (messageLength == 6 &&
+            strncmp(message, msgZoneUpdate, strlen(msgZoneUpdate)) == 0) {
+            updateZoneState(message);
+        // System Armed
+        } else if (messageLength >= 6 &&
+                    strncmp(message, msgArmUpdate, strlen(msgArmUpdate)) == 0) {
+            updateAlarmState(ARMED);
+        // System Disarmed
+        } else if (messageLength >= 6 &&
+                    strncmp(message, msgDisarmUpdate, strlen(msgDisarmUpdate)) == 0) {
             if (currentTask != IDLE)
-                    processTask(UNKNOWN_MESSAGE);
-        }
-        messageReady = false;
-    }
+                processTask(IS_DISARMED);
+            updateAlarmState(DISARMED);
+        // Entry while armed
+        } else if (messageLength == 6 &&
+                    strncmp(message, msgEntryUpdate, strlen(msgEntryUpdate)) == 0) {
+            updateAlarmState(PENDING);
+        // System arming
+        } else if (messageLength == 6 &&
+                    strncmp(message, msgArmingUpdate, strlen(msgArmingUpdate)) == 0) {
+            if (currentTask != IDLE)
+                processTask(IS_ARMING);
+            updateAlarmState(ARMING);
+        // Intruder
+        } else if (messageLength == 6 &&
+                    strncmp(message, msgIntruderUpdate, strlen(msgIntruderUpdate)) == 0) {
+            updateAlarmState(TRIGGERED);
+        // User logged in with code or tag
+        } else if (messageLength == 6 &&
+                    (strncmp(message, msgUserPinLogin, strlen(msgUserPinLogin)) == 0 ||
+                    strncmp(message, msgUserTagLogin, strlen(msgUserTagLogin)) == 0)) {
+            int user = message[4] - '0';
 
+            if (user < userCount)
+                Log.info("User logged in: %s", users[user]);
+            else
+                Log.info("User logged in: Outside of user array size");
+
+            if (currentTask != IDLE)
+                processTask(LOGIN_CONFIRMED);
+        // Reply to ASTATUS request that the system is disarmed
+        } else if (messageLength == 5 &&
+                    strncmp(message, msgReplyDisarmed, strlen(msgReplyDisarmed)) == 0) {
+            if (currentTask != IDLE)
+                processTask(IS_DISARMED);
+            else
+                updateAlarmState(DISARMED);
+        // Reply to ASTATUS request that the system is armed
+        } else if (messageLength == 5 &&
+                    strncmp(message, msgReplyArmed, strlen(msgReplyArmed)) == 0) {
+            if (currentTask != IDLE) {
+                processTask(IS_ARMED);
+            } else {
+                updateAlarmState(ARMED);
+            }
+        } else if (
+                (messageLength >= strlen(msgScreenArmedPart) &&
+                    strncmp(message, msgScreenArmedPart, strlen(msgScreenArmedPart)) == 0) ||
+                (messageLength >= strlen(msgScreenArmedNight) &&
+                    strncmp(message, msgScreenArmedNight, strlen(msgScreenArmedNight)) == 0) ||
+                (messageLength >= strlen(msgScreenIdlePartArmed) &&
+                    strncmp(message, msgScreenIdlePartArmed, strlen(msgScreenIdlePartArmed)) == 0)) {
+            if (currentTask != IDLE)
+                processTask(SCREEN_PART_ARMED);
+            else
+                updateAlarmState(ARMED_HOME);
+        } else if (messageLength >= strlen(msgScreenArmedFull) &&
+                    strncmp(message, msgScreenArmedFull, strlen(msgScreenArmedFull)) == 0) {
+            if (currentTask != IDLE)
+                processTask(SCREEN_FULL_ARMED);
+            else
+                updateAlarmState(ARMED_AWAY);
+        } else if (messageLength >= strlen(msgScreenIdle) &&
+                    strncmp(message, msgScreenIdle, strlen(msgScreenIdle)) == 0) {
+            if (currentTask != IDLE)
+                processTask(SCREEN_IDLE);
+            else if (alarmState == ARMED)
+                updateAlarmState(ARMED_AWAY);
+        // Shown directly after user logs in
+        } else if (messageLength > strlen(msgWelcomeBack) &&
+                    strncmp(message, msgWelcomeBack, strlen(msgWelcomeBack)) == 0) {
+            if (currentTask == WAIT_FOR_PROMPT)
+                delayCommand(COMMAND_SCREEN_STATE, 500);
+        // Shown shortly after user logs in
+        } else if (messageLength >= strlen(msgScreenQuestionArm) &&
+                    strncmp(message, msgScreenQuestionArm, strlen(msgScreenQuestionArm)) == 0) {
+            if (currentTask != IDLE)
+                processTask(FULL_ARM_PROMPT);
+        } else if (messageLength >= strlen(msgScreenQuestionPartArm) &&
+                    strncmp(message, msgScreenQuestionPartArm, strlen(msgScreenQuestionPartArm)) == 0) {
+            if (currentTask != IDLE)
+                processTask(PART_ARM_PROMPT);
+        } else if (messageLength >= strlen(msgScreenQuestionNightArm) &&
+                    strncmp(message, msgScreenQuestionNightArm, strlen(msgScreenQuestionNightArm)) == 0) {
+            if (currentTask != IDLE)
+                processTask(NIGHT_ARM_PROMPT);
+        } else if (messageLength >= strlen(msgScreenQuestionDisarm) &&
+                    strncmp(message, msgScreenQuestionDisarm, strlen(msgScreenQuestionDisarm)) == 0) {
+            if (currentTask != IDLE)
+                processTask(DISARM_PROMPT);
+        } else if (messageLength >= strlen(msgScreenAreainEntry) &&
+                    strncmp(message, msgScreenAreainEntry, strlen(msgScreenAreainEntry)) == 0) {
+            if (currentTask != IDLE)
+                processTask(SCREEN_AREA_ENTRY);
+        } else if (messageLength >= strlen(msgScreenAreainExit) &&
+            strncmp(message, msgScreenAreainExit, strlen(msgScreenAreainExit)) == 0) {
+            if (currentTask != IDLE)
+                processTask(SCREEN_AREA_EXIT);
+        // Fails to arm. e.g.
+        // Zone 012 Active Garage Door
+        } else if (messageLength >= 17 &&
+                    strncmp(message, "Zone", 4) == 0 &&
+                    (strstr(message, "Active") - message) == 9) {
+            Log.info("Failed to arm. Zone active while Arming");
+            requestArmState();
+        } else {
+            if (message[0] == '"')
+                Log.info(String::format("Unknown texecom command - %s", message));
+            else
+                Log.info(String::format("Unknown non-texecom command - %s", message));
+
+            if (currentTask != IDLE) {
+                if (screenRequestRetryCount < 3) {
+                    if (currentTask == CONFIRM_ARMED || currentTask == CONFIRM_DISARMED) {
+                        screenRequestRetryCount++;
+                        requestArmState();
+                    } else if (currentTask == CONFIRM_IDLE_SCREEN ||
+                               currentTask == WAIT_FOR_PROMPT ||
+                               currentTask == WAIT_FOR_PART_ARM_PROMPT ||
+                               currentTask == WAIT_FOR_NIGHT_ARM_PROMPT) {
+                        screenRequestRetryCount++;
+                        requestScreen();
+                    }
+                } else {
+                    processTask(UNKNOWN_MESSAGE);
+                }
+            }
+        }
+    }
 
     if (performLogin && millis() > nextPinEntryTime) {
         texSerial.print("KEY");
@@ -530,7 +546,6 @@ void Texecom::loop() {
             nextPinEntryTime = millis() + PIN_ENTRY_DELAY;
         }
     }
-
 
     if (currentTask == IDLE && alarmState == ARMING &&
         millis() > (lastStateChange + armingTimeout)) {

@@ -138,8 +138,8 @@ class Texecom {
     const uint8_t maxMessageSize = 100;
     char message[101];
     char buffer[101];
-    bool messageReady = false;
     uint8_t bufferPosition;
+    uint8_t screenRequestRetryCount = 0;
 
     bool performLogin = false;
 
