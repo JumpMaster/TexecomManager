@@ -340,6 +340,13 @@ void Texecom::abortTask() {
     commandAttempts = 0;
 }
 
+void Texecom::setup() {
+    pinMode(pinFullArmed, INPUT);
+    pinMode(pinPartArmed, INPUT);
+    pinMode(pinEntry, INPUT);
+    pinMode(pinExiting, INPUT);
+}
+
 void Texecom::loop() {
     bool messageReady = false;
     bool messageComplete = true;
@@ -397,23 +404,23 @@ void Texecom::loop() {
         // System Armed
         } else if (messageLength >= 6 &&
                     strncmp(message, msgArmUpdate, strlen(msgArmUpdate)) == 0) {
-            updateAlarmState(ARMED);
+            // updateAlarmState(ARMED);
         // System Disarmed
         } else if (messageLength >= 6 &&
                     strncmp(message, msgDisarmUpdate, strlen(msgDisarmUpdate)) == 0) {
             if (currentTask != IDLE)
                 processTask(IS_DISARMED);
-            updateAlarmState(DISARMED);
+            // updateAlarmState(DISARMED);
         // Entry while armed
         } else if (messageLength == 6 &&
                     strncmp(message, msgEntryUpdate, strlen(msgEntryUpdate)) == 0) {
-            updateAlarmState(PENDING);
+            // updateAlarmState(PENDING);
         // System arming
         } else if (messageLength == 6 &&
                     strncmp(message, msgArmingUpdate, strlen(msgArmingUpdate)) == 0) {
             if (currentTask != IDLE)
                 processTask(IS_ARMING);
-            updateAlarmState(ARMING);
+            // updateAlarmState(ARMING);
         // Intruder
         } else if (messageLength == 6 &&
                     strncmp(message, msgIntruderUpdate, strlen(msgIntruderUpdate)) == 0) {
@@ -436,15 +443,15 @@ void Texecom::loop() {
                     strncmp(message, msgReplyDisarmed, strlen(msgReplyDisarmed)) == 0) {
             if (currentTask != IDLE)
                 processTask(IS_DISARMED);
-            else
-                updateAlarmState(DISARMED);
+            // else
+                // updateAlarmState(DISARMED);
         // Reply to ASTATUS request that the system is armed
         } else if (messageLength == 5 &&
                     strncmp(message, msgReplyArmed, strlen(msgReplyArmed)) == 0) {
             if (currentTask != IDLE) {
                 processTask(IS_ARMED);
-            } else {
-                updateAlarmState(ARMED);
+            // } else {
+                // updateAlarmState(ARMED);
             }
         } else if (
                 (messageLength >= strlen(msgScreenArmedPart) &&
@@ -455,20 +462,20 @@ void Texecom::loop() {
                     strncmp(message, msgScreenIdlePartArmed, strlen(msgScreenIdlePartArmed)) == 0)) {
             if (currentTask != IDLE)
                 processTask(SCREEN_PART_ARMED);
-            else
-                updateAlarmState(ARMED_HOME);
+            // else
+                // updateAlarmState(ARMED_HOME);
         } else if (messageLength >= strlen(msgScreenArmedFull) &&
                     strncmp(message, msgScreenArmedFull, strlen(msgScreenArmedFull)) == 0) {
             if (currentTask != IDLE)
                 processTask(SCREEN_FULL_ARMED);
-            else
-                updateAlarmState(ARMED_AWAY);
+            // else
+                // updateAlarmState(ARMED_AWAY);
         } else if (messageLength >= strlen(msgScreenIdle) &&
                     strncmp(message, msgScreenIdle, strlen(msgScreenIdle)) == 0) {
             if (currentTask != IDLE)
                 processTask(SCREEN_IDLE);
-            else if (alarmState == ARMED)
-                updateAlarmState(ARMED_AWAY);
+            // else if (alarmState == ARMED)
+                // updateAlarmState(ARMED_AWAY);
         // Shown directly after user logs in
         } else if (messageLength > strlen(msgWelcomeBack) &&
                     strncmp(message, msgWelcomeBack, strlen(msgWelcomeBack)) == 0) {
@@ -585,4 +592,41 @@ void Texecom::loop() {
 
     if (currentTask == IDLE && (lastStateCheck == 0 || millis() > (lastStateCheck + stateCheckFrequency)))
         requestArmState();
+
+    
+    bool _state = digitalRead(pinFullArmed);
+
+    if (_state != statePinFullArmed) {
+        statePinFullArmed = _state;
+        if (_state == LOW)
+            updateAlarmState(ARMED_AWAY);
+        else
+            updateAlarmState(DISARMED);
+    }
+
+    _state = digitalRead(pinPartArmed);
+
+    if (_state != statePinPartArmed) {
+        statePinPartArmed = _state;
+        if (_state == LOW)
+            updateAlarmState(ARMED_HOME);
+        else
+            updateAlarmState(DISARMED);
+    }
+
+    _state = digitalRead(pinEntry);
+
+    if (_state != statePinEntry) {
+        statePinEntry = _state;
+        if (_state == LOW)
+            updateAlarmState(PENDING);
+    }
+
+    _state = digitalRead(pinExiting);
+
+    if (_state != statePinExiting) {
+        statePinExiting = _state;
+        if (_state == LOW)
+            updateAlarmState(PENDING);
+    }
 }

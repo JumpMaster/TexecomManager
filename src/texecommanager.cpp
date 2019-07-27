@@ -163,11 +163,7 @@ void setup() {
     Particle.variable("reset-time", resetTime);
     waitUntil(WiFi.ready);
     connectToMQTT();
-
-    pinMode(D0, INPUT);
-    pinMode(D1, INPUT);
-    pinMode(D2, INPUT);
-    pinMode(D3, INPUT);
+    texecom.setup();
 
     uint32_t resetReasonData = System.resetReasonData();
     Particle.function("setDebug", setDebug);
@@ -184,37 +180,5 @@ void loop() {
     }
 
     texecom.loop();
-
-
-    bool state = digitalRead(D0);
-
-    if (state != D0State) {
-        Log.info("D0 State is %s", state ? "HIGH" : "LOW");
-        D0State = state;
-    }
-
-    state = digitalRead(D1);
-
-    if (state != D1State) {
-        Log.info("D1 State is %s", state ? "HIGH" : "LOW");
-        D1State = state;
-    }
-
-    state = digitalRead(D2);
-
-    if (state != D2State) {
-        Log.info("D2 State is %s", state ? "HIGH" : "LOW");
-        D2State = state;
-    }
-
-
-    state = digitalRead(D3);
-
-    if (state != D3State) {
-        Log.info("D3 State is %s", state ? "HIGH" : "LOW");
-        D3State = state;
-    }
-
-
     wd.checkin();  // resets the AWDT count
 }

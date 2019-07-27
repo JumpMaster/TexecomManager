@@ -79,6 +79,7 @@ class Texecom {
 
  public:
     Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t));
+    void setup();
     void loop();
     void disarm(const char *code);
     void arm(const char *code, ARM_TYPE type);
@@ -170,6 +171,16 @@ class Texecom {
     uint32_t messageStart;
 
     uint8_t triggeredZone = 0;
+
+    const int pinFullArmed = D0;
+    const int pinPartArmed = D1;
+    const int pinExiting = D2;
+    const int pinEntry = D3;
+
+    bool statePinFullArmed = HIGH;
+    bool statePinPartArmed = HIGH;
+    bool statePinEntry = HIGH;
+    bool statePinExiting = HIGH;
 };
 
 #endif  // __TEXECOM_H_
