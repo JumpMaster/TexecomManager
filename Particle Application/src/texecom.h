@@ -176,11 +176,17 @@ class Texecom {
     const int pinPartArmed = D1;
     const int pinExiting = D2;
     const int pinEntry = D3;
+    const int pinTriggered = D4;
+    const int pinPowerFault = D5;
+    const int pinSystemFault = D6;
 
     bool statePinFullArmed = HIGH;
     bool statePinPartArmed = HIGH;
     bool statePinEntry = HIGH;
     bool statePinExiting = HIGH;
+    bool statePinTriggered = HIGH;
+    bool statePinPowerFault = HIGH;
+    bool statePinSystemFault = HIGH;
 };
 
 #endif  // __TEXECOM_H_

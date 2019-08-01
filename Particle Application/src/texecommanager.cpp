@@ -25,12 +25,13 @@ Texecom texecom(alarmCallback);
 uint32_t resetTime = 0;
 bool isDebug = false;
 
-bool D0State = LOW;
-bool D1State = LOW;
-bool D2State = LOW;
-bool D3State = LOW;
-
-PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort, "Texecom");
+PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort,
+  "Texecom", System.deviceID(),
+  LOG_LEVEL_NONE, {
+  { "app", LOG_LEVEL_ALL }
+  // TOO MUCH!!! { “system”, LOG_LEVEL_ALL },
+  // TOO MUCH!!! { “comm”, LOG_LEVEL_ALL }
+});
 
 void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state) {
     if (callbackType == Texecom::ZONE_STATE_CHANGE) {

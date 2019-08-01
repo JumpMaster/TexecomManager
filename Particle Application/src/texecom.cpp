@@ -629,4 +629,33 @@ void Texecom::loop() {
         if (_state == LOW)
             updateAlarmState(PENDING);
     }
+/*
+    _state = digitalRead(pinTriggered);
+
+    if (_state != statePinTriggered) {
+        statePinTriggered = _state;
+        if (_state == LOW)
+            updateAlarmState(TRIGGERED);
+    }
+
+    _state = digitalRead(pinPowerFault);
+
+    if (_state != pinPowerFault) {
+        statePinPowerFault = _state;
+        // if (_state == LOW)
+            // updateAlarmState(ARMED_HOME);
+        // else
+            // updateAlarmState(DISARMED);
+    }
+
+    _state = digitalRead(pinSystemFault);
+
+    if (_state != pinSystemFault) {
+        statePinSystemFault = _state;
+        // if (_state == LOW)
+            // updateAlarmState(ARMED_HOME);
+        // else
+            // updateAlarmState(DISARMED);
+    }
+*/
 }
