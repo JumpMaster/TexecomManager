@@ -43,7 +43,7 @@ void Texecom::arm(const char *code, ARM_TYPE type) {
 }
 
 void Texecom::requestArmState() {
-    lastStateCheck = millis();
+    // lastStateCheck = millis();
     request(COMMAND_ARMED_STATE);
 }
 
@@ -340,11 +340,87 @@ void Texecom::abortTask() {
     commandAttempts = 0;
 }
 
+void Texecom::checkDigiOutputs() {
+    bool _state = digitalRead(pinFullArmed);
+
+    if (_state != statePinFullArmed) {
+        statePinFullArmed = _state;
+        if (_state == LOW)
+            updateAlarmState(ARMED_AWAY);
+        else
+            updateAlarmState(DISARMED);
+    }
+
+    _state = digitalRead(pinPartArmed);
+
+    if (_state != statePinPartArmed) {
+        statePinPartArmed = _state;
+        if (_state == LOW)
+            updateAlarmState(ARMED_HOME);
+        else
+            updateAlarmState(DISARMED);
+    }
+
+    _state = digitalRead(pinEntry);
+
+    if (_state != statePinEntry) {
+        statePinEntry = _state;
+        if (_state == LOW)
+            updateAlarmState(PENDING);
+    }
+
+    _state = digitalRead(pinExiting);
+
+    if (_state != statePinExiting) {
+        statePinExiting = _state;
+        if (_state == LOW)
+            updateAlarmState(PENDING);
+    }
+/*
+    _state = digitalRead(pinTriggered);
+
+    if (_state != statePinTriggered) {
+        statePinTriggered = _state;
+        if (_state == LOW)
+            updateAlarmState(TRIGGERED);
+    }
+
+    _state = digitalRead(pinPowerFault);
+
+    if (_state != pinPowerFault) {
+        statePinPowerFault = _state;
+        // if (_state == LOW)
+            // updateAlarmState(ARMED_HOME);
+        // else
+            // updateAlarmState(DISARMED);
+    }
+
+    _state = digitalRead(pinSystemFault);
+
+    if (_state != pinSystemFault) {
+        statePinSystemFault = _state;
+        // if (_state == LOW)
+            // updateAlarmState(ARMED_HOME);
+        // else
+            // updateAlarmState(DISARMED);
+    }
+*/
+}
+
 void Texecom::setup() {
-    pinMode(pinFullArmed, INPUT);
-    pinMode(pinPartArmed, INPUT);
-    pinMode(pinEntry, INPUT);
-    pinMode(pinExiting, INPUT);
+    pinMode(pinFullArmed, INPUT_PULLUP);
+    pinMode(pinPartArmed, INPUT_PULLUP);
+    pinMode(pinEntry, INPUT_PULLUP);
+    pinMode(pinExiting, INPUT_PULLUP);
+    pinMode(pinTriggered, INPUT_PULLUP);
+    pinMode(pinPowerFault, INPUT_PULLUP);
+    pinMode(pinSystemFault, INPUT_PULLUP);
+
+    checkDigiOutputs();
+
+    if (alarmState == UNKNOWN) {
+        updateAlarmState(DISARMED);
+    }
 }
 
 void Texecom::loop() {
@@ -590,72 +666,8 @@ void Texecom::loop() {
         requestScreen();
     }
 
-    if (currentTask == IDLE && (lastStateCheck == 0 || millis() > (lastStateCheck + stateCheckFrequency)))
-        requestArmState();
+    // if (currentTask == IDLE && (lastStateCheck == 0 || millis() > (lastStateCheck + stateCheckFrequency)))
+    //    requestArmState();
 
-    
-    bool _state = digitalRead(pinFullArmed);
-
-    if (_state != statePinFullArmed) {
-        statePinFullArmed = _state;
-        if (_state == LOW)
-            updateAlarmState(ARMED_AWAY);
-        else
-            updateAlarmState(DISARMED);
-    }
-
-    _state = digitalRead(pinPartArmed);
-
-    if (_state != statePinPartArmed) {
-        statePinPartArmed = _state;
-        if (_state == LOW)
-            updateAlarmState(ARMED_HOME);
-        else
-            updateAlarmState(DISARMED);
-    }
-
-    _state = digitalRead(pinEntry);
-
-    if (_state != statePinEntry) {
-        statePinEntry = _state;
-        if (_state == LOW)
-            updateAlarmState(PENDING);
-    }
-
-    _state = digitalRead(pinExiting);
-
-    if (_state != statePinExiting) {
-        statePinExiting = _state;
-        if (_state == LOW)
-            updateAlarmState(PENDING);
-    }
-/*
-    _state = digitalRead(pinTriggered);
-
-    if (_state != statePinTriggered) {
-        statePinTriggered = _state;
-        if (_state == LOW)
-            updateAlarmState(TRIGGERED);
-    }
-
-    _state = digitalRead(pinPowerFault);
-
-    if (_state != pinPowerFault) {
-        statePinPowerFault = _state;
-        // if (_state == LOW)
-            // updateAlarmState(ARMED_HOME);
-        // else
-            // updateAlarmState(DISARMED);
-    }
-
-    _state = digitalRead(pinSystemFault);
-
-    if (_state != pinSystemFault) {
-        statePinSystemFault = _state;
-        // if (_state == LOW)
-            // updateAlarmState(ARMED_HOME);
-        // else
-            // updateAlarmState(DISARMED);
-    }
-*/
+    checkDigiOutputs();
 }

@@ -26,7 +26,7 @@ uint32_t resetTime = 0;
 bool isDebug = false;
 
 PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort,
-  "Texecom", System.deviceID(),
+  "ArgonTexecom", System.deviceID(),
   LOG_LEVEL_NONE, {
   { "app", LOG_LEVEL_ALL }
   // TOO MUCH!!! { “system”, LOG_LEVEL_ALL },
@@ -56,7 +56,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     memcpy(p, payload, length);
     p[length] = '\0';
 
-    if (strcmp(topic, "home/security/alarm/set") == 0) {
+    if (strcmp(topic, "home/security/alarm_beta/set") == 0) {
 
         const char *action = strtok(p, ":");
         const char *code = strtok(NULL, ":");
@@ -109,7 +109,7 @@ void updateAlarmState(Texecom::ALARM_STATE newState) {
     if (newState != Texecom::ARMED) {  // Update Home-Assistant
         mqttStateConfirmed = false;
         if (mqttClient.isConnected())
-            mqttClient.publish("home/security/alarm/state", alarmStateStrings[newState], MQTT::QOS2, true);
+            mqttClient.publish("home/security/alarm_beta/state", alarmStateStrings[newState], MQTT::QOS2, true);
     }
 }
 
@@ -143,9 +143,9 @@ void connectToMQTT() {
     if (mqttConnected) {
         mqttConnectionAttempts = 0;
         Log.info("MQTT Connected");
-        mqttClient.subscribe("home/security/alarm/set");
-        mqttClient.subscribe("home/security/alarm/code");
-        mqttClient.subscribe("home/security/alarm/state");
+        mqttClient.subscribe("home/security/alarm_beta/set");
+        mqttClient.subscribe("home/security/alarm_beta/code");
+        mqttClient.subscribe("home/security/alarm_beta/state");
     } else {
         mqttConnectionAttempts++;
         Log.info("MQTT failed to connect");
@@ -158,18 +158,25 @@ void random_seed_from_cloud(unsigned seed) {
 
 SYSTEM_THREAD(ENABLED)
 STARTUP(System.enableFeature(FEATURE_RESET_INFO));
-STARTUP(WiFi.selectAntenna(ANT_EXTERNAL));  // selects the u.FL antenna
+//STARTUP(WiFi.selectAntenna(ANT_EXTERNAL));  // selects the u.FL antenna
 
 void setup() {
+    
+    waitUntil(Particle.connected);
+
+    do {
+        resetTime = Time.now();
+        delay(10);
+    } while (resetTime < 1500000000  || millis() < 10000);
+
     Particle.variable("reset-time", resetTime);
-    waitUntil(WiFi.ready);
     connectToMQTT();
     texecom.setup();
 
     uint32_t resetReasonData = System.resetReasonData();
     Particle.function("setDebug", setDebug);
     Particle.variable("isDebug", isDebug);
-    Particle.publish("pushover", String::format("Alarm: I am awake!: %d-%d", System.resetReason(), resetReasonData), PRIVATE);
+    Particle.publish("pushover", String::format("ArgonAlarm: I am awake!: %d-%d", System.resetReason(), resetReasonData), PRIVATE);
 }
 
 void loop() {

@@ -99,6 +99,7 @@ class Texecom {
     void delayCommand(COMMAND command, int delay);
     void updateAlarmState(ALARM_STATE alarmState);
     void updateZoneState(char *message);
+    void checkDigiOutputs();
 
     const char *msgZoneUpdate = "\"Z0";
     const char *msgArmUpdate = "\"A0";
@@ -157,8 +158,8 @@ class Texecom {
     int commandAttempts = 0;
     const uint8_t maxRetries = 3;
 
-    uint32_t lastStateCheck;
-    const unsigned int stateCheckFrequency = 300000;
+    // uint32_t lastStateCheck;
+    // const unsigned int stateCheckFrequency = 300000;
 
     char userPin[9];
     uint8_t loginPinPosition;
