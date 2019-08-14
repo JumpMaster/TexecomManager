@@ -408,13 +408,13 @@ void Texecom::checkDigiOutputs() {
 }
 
 void Texecom::setup() {
-    pinMode(pinFullArmed, INPUT_PULLUP);
-    pinMode(pinPartArmed, INPUT_PULLUP);
-    pinMode(pinEntry, INPUT_PULLUP);
-    pinMode(pinExiting, INPUT_PULLUP);
-    pinMode(pinTriggered, INPUT_PULLUP);
-    pinMode(pinPowerFault, INPUT_PULLUP);
-    pinMode(pinSystemFault, INPUT_PULLUP);
+    pinMode(pinFullArmed, INPUT);
+    pinMode(pinPartArmed, INPUT);
+    pinMode(pinEntry, INPUT);
+    pinMode(pinExiting, INPUT);
+    pinMode(pinTriggered, INPUT);
+    pinMode(pinPowerFault, INPUT);
+    pinMode(pinSystemFault, INPUT);
 
     checkDigiOutputs();
 
