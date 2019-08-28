@@ -3,7 +3,6 @@
 #include "texecom.h"
 
 Texecom::Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t)) {
-    texSerial.begin(19200, SERIAL_8N1);  // open serial communications
     this->callback = callback;
     userCount = sizeof(users) / sizeof(char*);
 }
@@ -43,7 +42,7 @@ void Texecom::arm(const char *code, ARM_TYPE type) {
 }
 
 void Texecom::requestArmState() {
-    // lastStateCheck = millis();
+    lastStateCheck = millis();
     request(COMMAND_ARMED_STATE);
 }
 
@@ -341,6 +340,7 @@ void Texecom::abortTask() {
 }
 
 void Texecom::checkDigiOutputs() {
+    return;
     bool _state = digitalRead(pinFullArmed);
 
     if (_state != statePinFullArmed) {
@@ -408,6 +408,8 @@ void Texecom::checkDigiOutputs() {
 }
 
 void Texecom::setup() {
+    texSerial.begin(19200, SERIAL_8N1);  // open serial communications
+    /*
     pinMode(pinFullArmed, INPUT);
     pinMode(pinPartArmed, INPUT);
     pinMode(pinEntry, INPUT);
@@ -421,6 +423,7 @@ void Texecom::setup() {
     if (alarmState == UNKNOWN) {
         updateAlarmState(DISARMED);
     }
+    */
 }
 
 void Texecom::loop() {
@@ -472,7 +475,7 @@ void Texecom::loop() {
     if (messageReady) {
         char messageLength = strlen(message);
         Log.info(message);
-
+        
         // Zone state changed
         if (messageLength == 6 &&
             strncmp(message, msgZoneUpdate, strlen(msgZoneUpdate)) == 0) {
@@ -480,23 +483,23 @@ void Texecom::loop() {
         // System Armed
         } else if (messageLength >= 6 &&
                     strncmp(message, msgArmUpdate, strlen(msgArmUpdate)) == 0) {
-            // updateAlarmState(ARMED);
+            updateAlarmState(ARMED);
         // System Disarmed
         } else if (messageLength >= 6 &&
                     strncmp(message, msgDisarmUpdate, strlen(msgDisarmUpdate)) == 0) {
             if (currentTask != IDLE)
                 processTask(IS_DISARMED);
-            // updateAlarmState(DISARMED);
+            updateAlarmState(DISARMED);
         // Entry while armed
         } else if (messageLength == 6 &&
                     strncmp(message, msgEntryUpdate, strlen(msgEntryUpdate)) == 0) {
-            // updateAlarmState(PENDING);
+            updateAlarmState(PENDING);
         // System arming
         } else if (messageLength == 6 &&
                     strncmp(message, msgArmingUpdate, strlen(msgArmingUpdate)) == 0) {
             if (currentTask != IDLE)
                 processTask(IS_ARMING);
-            // updateAlarmState(ARMING);
+            updateAlarmState(ARMING);
         // Intruder
         } else if (messageLength == 6 &&
                     strncmp(message, msgIntruderUpdate, strlen(msgIntruderUpdate)) == 0) {
@@ -519,16 +522,18 @@ void Texecom::loop() {
                     strncmp(message, msgReplyDisarmed, strlen(msgReplyDisarmed)) == 0) {
             if (currentTask != IDLE)
                 processTask(IS_DISARMED);
-            // else
-                // updateAlarmState(DISARMED);
+            else
+                updateAlarmState(DISARMED);
+        
         // Reply to ASTATUS request that the system is armed
         } else if (messageLength == 5 &&
                     strncmp(message, msgReplyArmed, strlen(msgReplyArmed)) == 0) {
             if (currentTask != IDLE) {
                 processTask(IS_ARMED);
-            // } else {
-                // updateAlarmState(ARMED);
+            } else {
+                updateAlarmState(ARMED);
             }
+        
         } else if (
                 (messageLength >= strlen(msgScreenArmedPart) &&
                     strncmp(message, msgScreenArmedPart, strlen(msgScreenArmedPart)) == 0) ||
@@ -538,20 +543,20 @@ void Texecom::loop() {
                     strncmp(message, msgScreenIdlePartArmed, strlen(msgScreenIdlePartArmed)) == 0)) {
             if (currentTask != IDLE)
                 processTask(SCREEN_PART_ARMED);
-            // else
-                // updateAlarmState(ARMED_HOME);
+            else
+                updateAlarmState(ARMED_HOME);
         } else if (messageLength >= strlen(msgScreenArmedFull) &&
                     strncmp(message, msgScreenArmedFull, strlen(msgScreenArmedFull)) == 0) {
             if (currentTask != IDLE)
                 processTask(SCREEN_FULL_ARMED);
-            // else
-                // updateAlarmState(ARMED_AWAY);
+            else
+                updateAlarmState(ARMED_AWAY);
         } else if (messageLength >= strlen(msgScreenIdle) &&
                     strncmp(message, msgScreenIdle, strlen(msgScreenIdle)) == 0) {
             if (currentTask != IDLE)
                 processTask(SCREEN_IDLE);
-            // else if (alarmState == ARMED)
-                // updateAlarmState(ARMED_AWAY);
+            else if (alarmState == ARMED)
+                updateAlarmState(ARMED_AWAY);
         // Shown directly after user logs in
         } else if (messageLength > strlen(msgWelcomeBack) &&
                     strncmp(message, msgWelcomeBack, strlen(msgWelcomeBack)) == 0) {
@@ -666,8 +671,8 @@ void Texecom::loop() {
         requestScreen();
     }
 
-    // if (currentTask == IDLE && (lastStateCheck == 0 || millis() > (lastStateCheck + stateCheckFrequency)))
-    //    requestArmState();
+    if (currentTask == IDLE && (lastStateCheck == 0 || millis() > (lastStateCheck + stateCheckFrequency)))
+       requestArmState();
 
     checkDigiOutputs();
 }
