@@ -24,7 +24,8 @@ bool mqttStateConfirmed = true;
 Texecom texecom(alarmCallback);
 uint32_t resetTime = 0;
 bool isDebug = false;
-bool startupPaused = true;
+retained uint32_t lastHardResetTime;
+retained int resetCount;
 
 PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort,
   "ArgonTexecom", System.deviceID(),
@@ -161,29 +162,36 @@ SYSTEM_THREAD(ENABLED)
 STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 //STARTUP(WiFi.selectAntenna(ANT_EXTERNAL));  // selects the u.FL antenna
 
-int safeToContinue(const char* command) {
-    startupPaused = false;
-    return 1;
-}
-
 void setup() {
     
-    waitUntil(Particle.connected);
-    
     Particle.function("setDebug", setDebug);
-    Particle.function("safeToContinue", safeToContinue);
     Particle.variable("isDebug", isDebug);
     Particle.variable("reset-time", resetTime);
 
+    waitFor(Particle.connected, 30000);
+    
     do {
         resetTime = Time.now();
-        delay(10);
-    } while (resetTime < 1500000000  || millis() < 10000);
-
-    Log.info("Boot complete");
-
-    while (startupPaused)
         Particle.process();
+    } while (resetTime < 1500000000 || millis() < 10000);
+    
+    if (System.resetReason() == RESET_REASON_PANIC) {
+        if ((Time.now() - lastHardResetTime) < 120) {
+            resetCount++;
+        } else {
+            resetCount = 1;
+        }
+
+        lastHardResetTime = Time.now();
+
+        if (resetCount > 3) {
+            System.enterSafeMode();
+        }
+    } else {
+        resetCount = 0;
+    }
+
+    Log.info("Boot complete. Reset count = %d", resetCount);
 
     connectToMQTT();
     texecom.setup();
