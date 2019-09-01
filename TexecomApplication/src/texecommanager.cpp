@@ -158,6 +158,15 @@ void random_seed_from_cloud(unsigned seed) {
     srand(seed);
 }
 
+int cloudReset(const char* data) {
+    uint32_t rTime = millis() + 10000;
+    Log.info("Cloud reset received");
+    while (millis() < rTime)
+        Particle.process();
+    System.reset();
+    return 0;
+}
+
 SYSTEM_THREAD(ENABLED)
 STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 //STARTUP(WiFi.selectAntenna(ANT_EXTERNAL));  // selects the u.FL antenna
@@ -165,6 +174,7 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 void setup() {
     
     Particle.function("setDebug", setDebug);
+    Particle.function("cloudReset", cloudReset);
     Particle.variable("isDebug", isDebug);
     Particle.variable("reset-time", resetTime);
 
