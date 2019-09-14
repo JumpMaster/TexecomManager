@@ -9,7 +9,7 @@
 // Stubs
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void sendTriggeredMessage(uint8_t triggeredZone);
-void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state);
+void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state, const char *message);
 void updateAlarmState(Texecom::ALARM_STATE newState);
 void updateZoneState(uint8_t zone, uint8_t state);
 
@@ -35,13 +35,17 @@ PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort,
   // TOO MUCH!!! { “comm”, LOG_LEVEL_ALL }
 });
 
-void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state) {
+void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state, const char *message) {
     if (callbackType == Texecom::ZONE_STATE_CHANGE) {
         updateZoneState(zone, state);
     } else if (callbackType == Texecom::ALARM_STATE_CHANGE) {
         updateAlarmState((Texecom::ALARM_STATE) state);
     } else if (callbackType == Texecom::ALARM_TRIGGERED) {
         sendTriggeredMessage(zone);
+    } else if (callbackType == Texecom::SEND_MESSAGE) {
+        if (mqttClient.isConnected()) {
+            mqttClient.publish("home/notification/high", message);
+        }
     }
 }
 
@@ -95,7 +99,7 @@ void sendTriggeredMessage(uint8_t triggeredZone) {
 
     if (triggeredZone >= 10 && mqttClient.isConnected()) {
         snprintf(charData, sizeof(charData), "Triggered by zone %s", alarmZoneStrings[triggeredZone-10]);
-        mqttClient.publish("home/notification/high", charData, true);
+        mqttClient.publish("home/notification/high", charData);
     }
 }
 

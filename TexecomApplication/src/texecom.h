@@ -28,7 +28,8 @@ class Texecom {
     typedef enum {
         ALARM_STATE_CHANGE = 0,
         ZONE_STATE_CHANGE = 1,
-        ALARM_TRIGGERED = 2
+        ALARM_TRIGGERED = 2,
+        SEND_MESSAGE = 3
     } CALLBACK_TYPE;
 
     typedef enum {
@@ -78,7 +79,7 @@ class Texecom {
     } ARM_TYPE;
 
  public:
-    Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t));
+    Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*));
     void setup();
     void loop();
     void disarm(const char *code);
@@ -95,7 +96,7 @@ class Texecom {
     void disarmSystem(RESULT result);
     void abortTask();
     void request(COMMAND command);
-    void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t);
+    void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*);
     void delayCommand(COMMAND command, int delay);
     void updateAlarmState(ALARM_STATE alarmState);
     void updateZoneState(char *message);
@@ -158,8 +159,8 @@ class Texecom {
     int commandAttempts = 0;
     const uint8_t maxRetries = 3;
 
-    uint32_t lastStateCheck;
-    const unsigned int stateCheckFrequency = 300000;
+    // uint32_t lastStateCheck;
+    // const unsigned int stateCheckFrequency = 300000;
 
     char userPin[9];
     uint8_t loginPinPosition;
@@ -173,21 +174,33 @@ class Texecom {
 
     uint8_t triggeredZone = 0;
 
-    const int pinFullArmed = D0;
-    const int pinPartArmed = D1;
-    const int pinExiting = D2;
-    const int pinEntry = D3;
-    const int pinTriggered = D4;
-    const int pinPowerFault = D5;
-    const int pinSystemFault = D6;
+//  Digi Output - Argon Pin - Texecom Configuration
+//  1 ----------------- D12 - 22 Full Armed
+//  2 ----------------- D16 - 23 Part Armed
+//  3 ----------------- D13 - 19 Exiting
+//  4 ----------------- D17 - 17 Entry
+//  5 ----------------- D14 - 00 Alarm
+//  6 ----------------- D18 - 27 Arm Failed
+//  7 ----------------- D15 - 66 Fault Present
+//  8 ----------------- D19 - 16 Area Ready
+
+    const int pinFullArmed = D12;
+    const int pinPartArmed = D16;
+    const int pinExiting = D13;
+    const int pinEntry = D17;
+    const int pinTriggered = D14;
+    const int pinArmFailed = D18;
+    const int pinFaultPresent = D15;
+    const int pinAreaReady = D19;
 
     bool statePinFullArmed = HIGH;
     bool statePinPartArmed = HIGH;
     bool statePinEntry = HIGH;
     bool statePinExiting = HIGH;
     bool statePinTriggered = HIGH;
-    bool statePinPowerFault = HIGH;
-    bool statePinSystemFault = HIGH;
+    bool statePinArmFailed = HIGH;
+    bool statePinFaultPresent = HIGH;
+    bool statePinAreaReady = LOW;
 };
 
 #endif  // __TEXECOM_H_
