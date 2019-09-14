@@ -3,7 +3,6 @@ secrets.h
 
 # Visual Studio Code
 .vscode
-project.properties
 
 # Particle Compiled Firmware
 target/ 
