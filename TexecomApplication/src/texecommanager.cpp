@@ -72,7 +72,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         const char *code = strtok(NULL, ":");
     
         if (strlen(code) >= 4 && digitsOnly(code)) {
-            if (strncmp(action, "arm", 3)) {
+            if (strncmp(action, "arm", 3) == 0) {
                 if (texecom.isReady()) {
                     if (strcmp(action, "arm_away") == 0) {
                         texecom.arm(code, Texecom::FULL_ARM);
@@ -83,7 +83,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                         texecom.arm(code, Texecom::NIGHT_ARM);
                     }
                 } else {
-                    mqttClient.publish("home/notification/low", "Arm attempted while alarm is not ready");
+                    char *notReadyMessage = "Arm attempted while alarm is not ready";
+                    Log.error(notReadyMessage);
+                    mqttClient.publish("home/notification/low", notReadyMessage);
                 }
             } else if (strcmp(action, "disarm") == 0) {
                 texecom.disarm(code);
