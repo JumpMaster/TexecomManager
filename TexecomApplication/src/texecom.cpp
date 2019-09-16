@@ -389,24 +389,36 @@ void Texecom::checkDigiOutputs() {
 
     if (_state != statePinAreaReady) {
         statePinAreaReady = _state;
-        if (_state == HIGH)
-            callback(SEND_MESSAGE, 0, 0, "Alarm reporting not ready");
+        if (_state == HIGH) {
+            // callback(SEND_MESSAGE, 0, 0, "Alarm reporting not ready");
+            // Log.error("Alarm is not ready");
+        } else {
+            // callback(SEND_MESSAGE, 0, 0, "Alarm reporting ready");
+            // Log.info("Alarm reporting ready");
+        }
     }
 
     _state = digitalRead(pinFaultPresent);
 
     if (_state != statePinFaultPresent) {
         statePinFaultPresent = _state;
-        if (_state == LOW)
-            callback(SEND_MESSAGE, 0, 0, "Alarm reporting a fault");
+        if (_state == LOW) {
+            callback(SEND_MESSAGE, 0, 0, "Alarm is reporting a fault");
+            Log.error("Alarm is reporting a fault");
+        } else {
+            callback(SEND_MESSAGE, 0, 0, "Alarm fault is resolved");
+            Log.info("Alarm fault is resolved");
+        }
     }
 
     _state = digitalRead(pinArmFailed);
 
     if (_state != statePinArmFailed) {
         statePinArmFailed = _state;
-        if (_state == LOW)
+        if (_state == LOW) {
             callback(SEND_MESSAGE, 0, 0, "Alarm failed to arm");
+            Log.error("Alarm failed to arm");
+        }
     }
 
 }

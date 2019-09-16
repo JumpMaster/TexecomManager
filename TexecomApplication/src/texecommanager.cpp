@@ -44,7 +44,7 @@ void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t st
         sendTriggeredMessage(zone);
     } else if (callbackType == Texecom::SEND_MESSAGE) {
         if (mqttClient.isConnected()) {
-            mqttClient.publish("home/notification/high", message);
+            mqttClient.publish("home/notification/low", message);
         }
     }
 }
