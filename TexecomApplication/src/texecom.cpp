@@ -389,13 +389,14 @@ void Texecom::checkDigiOutputs() {
 
     if (_state != statePinAreaReady) {
         statePinAreaReady = _state;
-        if (_state == HIGH) {
+        callback(ALARM_READY_CHANGE, 0, statePinAreaReady == LOW ? 1 : 0, NULL);
+        // if (_state == HIGH) {
             // callback(SEND_MESSAGE, 0, 0, "Alarm reporting not ready");
             // Log.error("Alarm is not ready");
-        } else {
+        // } else {
             // callback(SEND_MESSAGE, 0, 0, "Alarm reporting ready");
             // Log.info("Alarm reporting ready");
-        }
+        // }
     }
 
     _state = digitalRead(pinFaultPresent);

@@ -29,7 +29,8 @@ class Texecom {
         ALARM_STATE_CHANGE = 0,
         ZONE_STATE_CHANGE = 1,
         ALARM_TRIGGERED = 2,
-        SEND_MESSAGE = 3
+        ALARM_READY_CHANGE = 3,
+        SEND_MESSAGE = 4
     } CALLBACK_TYPE;
 
     typedef enum {
@@ -85,6 +86,7 @@ class Texecom {
     void disarm(const char *code);
     void arm(const char *code, ARM_TYPE type);
     void setDebug(bool enabled) { debugMode = enabled; }
+    bool isReady() { return statePinAreaReady == LOW; }
     ALARM_STATE getState() { return alarmState; }
 
  private:

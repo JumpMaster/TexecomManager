@@ -46,6 +46,10 @@ void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t st
         if (mqttClient.isConnected()) {
             mqttClient.publish("home/notification/low", message);
         }
+    } else if (callbackType == Texecom::ALARM_READY_CHANGE) {
+        char readyPayload[14];
+        snprintf(readyPayload, sizeof(readyPayload), "{\"ready\":\"%d\"}", state);
+        mqttClient.publish("home/security/alarm/attributes", readyPayload, MQTT::QOS2, true);
     }
 }
 
@@ -68,13 +72,19 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         const char *code = strtok(NULL, ":");
     
         if (strlen(code) >= 4 && digitsOnly(code)) {
-            if (strcmp(action, "arm_away") == 0) {
-                texecom.arm(code, Texecom::FULL_ARM);
-            } else if (
-                        strcmp(action, "arm_night") == 0 ||
-                        strcmp(action, "arm_home") == 0
-                      ) {
-                texecom.arm(code, Texecom::NIGHT_ARM);
+            if (strncmp(action, "arm", 3)) {
+                if (texecom.isReady()) {
+                    if (strcmp(action, "arm_away") == 0) {
+                        texecom.arm(code, Texecom::FULL_ARM);
+                    } else if (
+                                strcmp(action, "arm_night") == 0 ||
+                                strcmp(action, "arm_home") == 0
+                            ) {
+                        texecom.arm(code, Texecom::NIGHT_ARM);
+                    }
+                } else {
+                    mqttClient.publish("home/notification/low", "Arm attempted while alarm is not ready");
+                }
             } else if (strcmp(action, "disarm") == 0) {
                 texecom.disarm(code);
             }
