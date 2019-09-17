@@ -57,7 +57,6 @@ bool digitsOnly(const char *s) {
     while (*s) {
         if (isdigit(*s++) == 0) return false;
     }
-
     return true;
 }
 
@@ -83,7 +82,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                         texecom.arm(code, Texecom::NIGHT_ARM);
                     }
                 } else {
-                    char *notReadyMessage = "Arm attempted while alarm is not ready";
+                    const char *notReadyMessage = "Arm attempted while alarm is not ready";
                     Log.error(notReadyMessage);
                     mqttClient.publish("home/notification/low", notReadyMessage);
                 }
@@ -184,8 +183,12 @@ int cloudReset(const char* data) {
 }
 
 SYSTEM_THREAD(ENABLED)
-STARTUP(System.enableFeature(FEATURE_RESET_INFO));
-//STARTUP(WiFi.selectAntenna(ANT_EXTERNAL));  // selects the u.FL antenna
+
+void startupMacro() {
+    System.enableFeature(FEATURE_RESET_INFO);
+    System.enableFeature(FEATURE_RETAINED_MEMORY);
+}
+STARTUP(startupMacro());
 
 void setup() {
     
