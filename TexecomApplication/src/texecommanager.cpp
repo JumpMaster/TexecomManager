@@ -192,11 +192,6 @@ STARTUP(startupMacro());
 
 void setup() {
     
-    Particle.function("setDebug", setDebug);
-    Particle.function("cloudReset", cloudReset);
-    Particle.variable("isDebug", isDebug);
-    Particle.variable("reset-time", resetTime);
-
     waitFor(Particle.connected, 30000);
     
     do {
@@ -219,6 +214,12 @@ void setup() {
     } else {
         resetCount = 0;
     }
+
+    Particle.function("setDebug", setDebug);
+    Particle.function("cloudReset", cloudReset);
+    Particle.variable("isDebug", isDebug);
+    Particle.variable("reset-time", resetTime);
+    Particle.publishVitals(900);
 
     Log.info("Boot complete. Reset count = %d", resetCount);
 
