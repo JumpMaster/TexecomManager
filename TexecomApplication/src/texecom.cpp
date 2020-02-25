@@ -390,13 +390,6 @@ void Texecom::checkDigiOutputs() {
     if (_state != statePinAreaReady) {
         statePinAreaReady = _state;
         callback(ALARM_READY_CHANGE, 0, statePinAreaReady == LOW ? 1 : 0, NULL);
-        // if (_state == HIGH) {
-            // callback(SEND_MESSAGE, 0, 0, "Alarm reporting not ready");
-            // Log.error("Alarm is not ready");
-        // } else {
-            // callback(SEND_MESSAGE, 0, 0, "Alarm reporting ready");
-            // Log.info("Alarm reporting ready");
-        // }
     }
 
     _state = digitalRead(pinFaultPresent);
@@ -500,27 +493,22 @@ void Texecom::loop() {
         // System Armed
         } else if (messageLength >= 6 &&
                     strncmp(message, msgArmUpdate, strlen(msgArmUpdate)) == 0) {
-            // updateAlarmState(ARMED);
         // System Disarmed
         } else if (messageLength >= 6 &&
                     strncmp(message, msgDisarmUpdate, strlen(msgDisarmUpdate)) == 0) {
             if (currentTask != IDLE)
                 processTask(IS_DISARMED);
-            // updateAlarmState(DISARMED);
         // Entry while armed
         } else if (messageLength == 6 &&
                     strncmp(message, msgEntryUpdate, strlen(msgEntryUpdate)) == 0) {
-            // updateAlarmState(PENDING);
         // System arming
         } else if (messageLength == 6 &&
                     strncmp(message, msgArmingUpdate, strlen(msgArmingUpdate)) == 0) {
             if (currentTask != IDLE)
                 processTask(IS_ARMING);
-            // updateAlarmState(ARMING);
         // Intruder
         } else if (messageLength == 6 &&
                     strncmp(message, msgIntruderUpdate, strlen(msgIntruderUpdate)) == 0) {
-            // updateAlarmState(TRIGGERED);
         // User logged in with code or tag
         } else if (messageLength == 6 &&
                     (strncmp(message, msgUserPinLogin, strlen(msgUserPinLogin)) == 0 ||
@@ -538,19 +526,13 @@ void Texecom::loop() {
         } else if (messageLength == 5 &&
                     strncmp(message, msgReplyDisarmed, strlen(msgReplyDisarmed)) == 0) {
             if (currentTask != IDLE)
-                processTask(IS_DISARMED);
-            // else
-                // updateAlarmState(DISARMED);
-        
+                processTask(IS_DISARMED);        
         // Reply to ASTATUS request that the system is armed
         } else if (messageLength == 5 &&
                     strncmp(message, msgReplyArmed, strlen(msgReplyArmed)) == 0) {
             if (currentTask != IDLE) {
                 processTask(IS_ARMED);
-            // } else {
-                // updateAlarmState(ARMED);
             }
-        
         } else if (
                 (messageLength >= strlen(msgScreenArmedPart) &&
                     strncmp(message, msgScreenArmedPart, strlen(msgScreenArmedPart)) == 0) ||
@@ -560,20 +542,14 @@ void Texecom::loop() {
                     strncmp(message, msgScreenIdlePartArmed, strlen(msgScreenIdlePartArmed)) == 0)) {
             if (currentTask != IDLE)
                 processTask(SCREEN_PART_ARMED);
-            // else
-                // updateAlarmState(ARMED_HOME);
         } else if (messageLength >= strlen(msgScreenArmedFull) &&
                     strncmp(message, msgScreenArmedFull, strlen(msgScreenArmedFull)) == 0) {
             if (currentTask != IDLE)
                 processTask(SCREEN_FULL_ARMED);
-            // else
-                // updateAlarmState(ARMED_AWAY);
         } else if (messageLength >= strlen(msgScreenIdle) &&
                     strncmp(message, msgScreenIdle, strlen(msgScreenIdle)) == 0) {
             if (currentTask != IDLE)
                 processTask(SCREEN_IDLE);
-            // else if (alarmState == ARMED)
-                // updateAlarmState(ARMED_AWAY);
         // Shown directly after user logs in
         } else if (messageLength > strlen(msgWelcomeBack) &&
                     strncmp(message, msgWelcomeBack, strlen(msgWelcomeBack)) == 0) {
@@ -687,9 +663,6 @@ void Texecom::loop() {
         commandAttempts++;
         requestScreen();
     }
-
-    // if (currentTask == IDLE && (lastStateCheck == 0 || millis() > (lastStateCheck + stateCheckFrequency)))
-    //    requestArmState();
 
     checkDigiOutputs();
 }
