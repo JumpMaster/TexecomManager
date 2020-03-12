@@ -142,6 +142,15 @@ void updateZoneState(uint8_t zone, uint8_t state) {
         mqttClient.publish(mqttData, zoneState, true);
 }
 
+int cloudReset(const char* data) {
+    uint32_t rTime = millis() + 10000;
+    Log.info("Cloud reset received");
+    while (millis() < rTime)
+        Particle.process();
+    System.reset();
+    return 0;
+}
+
 int setDebug(const char *data) {
     if (strcmp(data, "true") == 0) {
         isDebug = true;
@@ -151,6 +160,12 @@ int setDebug(const char *data) {
     
     texecom.setDebug(isDebug);
     
+    return 0;
+}
+
+int setUDL(const char *data) {
+    EEPROM.put(0, data);
+    cloudReset(NULL);
     return 0;
 }
 
@@ -173,12 +188,8 @@ void random_seed_from_cloud(unsigned seed) {
     srand(seed);
 }
 
-int cloudReset(const char* data) {
-    uint32_t rTime = millis() + 10000;
-    Log.info("Cloud reset received");
-    while (millis() < rTime)
-        Particle.process();
-    System.reset();
+int sendTest(const char* data) {
+    texecom.sendTest(data);
     return 0;
 }
 
@@ -217,6 +228,8 @@ void setup() {
 
     Particle.function("setDebug", setDebug);
     Particle.function("cloudReset", cloudReset);
+    Particle.function("setUDL", setUDL);
+    Particle.function("sendTest", sendTest);
     Particle.variable("isDebug", isDebug);
     Particle.variable("reset-time", resetTime);
     Particle.publishVitals(900);

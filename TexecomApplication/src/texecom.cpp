@@ -7,6 +7,36 @@ Texecom::Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*))
     userCount = sizeof(users) / sizeof(char*);
 }
 
+void Texecom::sendTest(const char *text) {
+    if (strlen(text) == 0) {
+        if (millis() > simpleProtocolTimeout) {
+            Log.info("Simple login required");
+            simpleLoginRequired = true;
+        } else {
+            Log.info("Simple login valid");
+        }
+    } else if (strcmp(text, "STATUS") == 0) {
+        Log.info("Requesting arm state");
+        requestArmState();
+    } else if (strcmp(text, "LOGOUT") == 0) {
+        texSerial.print("\\H/");
+    } else if (strcmp(text, "IDENTITY") == 0) {
+        texSerial.print("\\I/");
+    } else if (strcmp(text, "TIME") == 0) {
+        texSerial.print("\\T?/");
+        delay(200);
+        texSerial.print("\\T");
+        texSerial.write(Time.day());
+        texSerial.write(Time.month());
+        texSerial.write(Time.year()-2000);
+        texSerial.write(Time.hour());
+        texSerial.write(Time.minute()-30);
+        texSerial.write("/");
+        delay(200);
+        texSerial.print("\\T?/");
+    }
+}
+
 void Texecom::request(COMMAND command) {
     texSerial.println(commandStrings[command]);
     lastCommandTime = millis();
@@ -429,6 +459,9 @@ void Texecom::setup() {
     pinMode(pinFaultPresent, INPUT);
     pinMode(pinAreaReady, INPUT);
 
+    EEPROM.get(0, udlCode);
+    Log.info(udlCode);
+    
     checkDigiOutputs();
 
     if (alarmState == UNKNOWN) {
@@ -588,11 +621,24 @@ void Texecom::loop() {
                     (strstr(message, "Active") - message) == 9) {
             Log.info("Failed to arm. Zone active while Arming");
             requestArmState();
+        } else if (strcmp(message, "OK") == 0) {
+            simpleProtocolTimeout = millis() + 30000;
+            if (simpleLoginRequired) {
+                Log.info("Simple protocol login confirmed");
+                simpleLoginRequired = false;
+                activeProtocol = SIMPLE;
+            }
         } else {
-            if (message[0] == '"')
-                Log.info(String::format("Unknown texecom command - %s", message));
-            else
-                Log.info(String::format("Unknown non-texecom command - %s", message));
+            if (message[0] == '"') {
+                Log.info(String::format("Unknown Crestron command - %s", message));
+            } else {
+                Log.info("Unknown non-Crestron command - %s", message);
+                if (message[0] < 64 || message[0] > 126) {
+                    for (int i = 0; i < strlen(message); i++) {
+                        Log.info("%d\n", message[i]);
+                    }
+                }
+            }
 
             if (currentTask != IDLE && !messageComplete) {
                 if (screenRequestRetryCount++ < 3) {
@@ -662,6 +708,22 @@ void Texecom::loop() {
         Log.info("commandWaitTimeout: Retrying request screen");
         commandAttempts++;
         requestScreen();
+    }
+
+    // Switch to the Simple Protocol
+    if (simpleLoginRequired && millis() > (simpleCommandLastSent+500)) {
+        Log.info("Performing simple login");
+        simpleCommandLastSent = millis();
+        texSerial.print("\\W");
+        texSerial.print(udlCode);
+        texSerial.print("/");
+    }
+
+    // Auto-logout of the Simple Protocol. Should never be required.
+    if (activeProtocol == SIMPLE && millis() > simpleProtocolTimeout) {
+        activeProtocol = CRESTRON;
+        texSerial.print("\\H/");
+        Log.info("Simple Protocol timeout");
     }
 
     checkDigiOutputs();

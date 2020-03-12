@@ -79,6 +79,11 @@ class Texecom {
         NIGHT_ARM = 1
     } ARM_TYPE;
 
+    typedef enum {
+        CRESTRON = 0,
+        SIMPLE = 1
+    } PROTOCOL;
+
  public:
     Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*));
     void setup();
@@ -88,6 +93,7 @@ class Texecom {
     void setDebug(bool enabled) { debugMode = enabled; }
     bool isReady() { return statePinAreaReady == LOW; }
     ALARM_STATE getState() { return alarmState; }
+    void sendTest(const  char *text);
 
  private:
     bool debugMode = false;
@@ -135,6 +141,7 @@ class Texecom {
     uint8_t userCount;  // This is set dynamically at class initialisation
     const char *users[4] = {"root", "Kevin", "Nicki", "Mumma"};
 
+    PROTOCOL activeProtocol = CRESTRON;
     TASK_TYPE task;
     ARM_TYPE armType;
     COMMAND delayedCommand;
@@ -161,9 +168,6 @@ class Texecom {
     int commandAttempts = 0;
     const uint8_t maxRetries = 3;
 
-    // uint32_t lastStateCheck;
-    // const unsigned int stateCheckFrequency = 300000;
-
     char userPin[9];
     uint8_t loginPinPosition;
     uint32_t nextPinEntryTime;
@@ -173,6 +177,12 @@ class Texecom {
     const int armingTimeout = 45000;
 
     uint32_t messageStart;
+
+
+    char udlCode[7];
+    uint32_t simpleProtocolTimeout;
+    uint32_t simpleCommandLastSent;
+    bool simpleLoginRequired = false;
 
     uint8_t triggeredZone = 0;
 
