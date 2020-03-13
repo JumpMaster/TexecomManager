@@ -34,20 +34,20 @@ class Texecom {
     } CALLBACK_TYPE;
 
     typedef enum {
-        IDLE,
-        START,
-        CONFIRM_ARMED,
-        CONFIRM_DISARMED,
-        CONFIRM_IDLE_SCREEN,
-        LOGIN,
-        LOGIN_WAIT,
-        WAIT_FOR_DISARM_PROMPT,
-        WAIT_FOR_ARM_PROMPT,
-        WAIT_FOR_PART_ARM_PROMPT,
-        WAIT_FOR_NIGHT_ARM_PROMPT,
-        ARM_REQUESTED,
-        DISARM_REQUESTED
-    } OPERATION;
+        CRESTRON_IDLE,
+        CRESTRON_START,
+        CRESTRON_CONFIRM_ARMED,
+        CRESTRON_CONFIRM_DISARMED,
+        CRESTRON_CONFIRM_IDLE_SCREEN,
+        CRESTRON_LOGIN,
+        CRESTRON_LOGIN_WAIT,
+        CRESTRON_WAIT_FOR_DISARM_PROMPT,
+        CRESTRON_WAIT_FOR_ARM_PROMPT,
+        CRESTRON_WAIT_FOR_PART_ARM_PROMPT,
+        CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT,
+        CRESTRON_ARM_REQUESTED,
+        CRESTRON_DISARM_REQUESTED
+    } CRESTRON_TASK;
 
     typedef enum {
         RESULT_NONE,
@@ -68,6 +68,12 @@ class Texecom {
         IS_ARMING,
         UNKNOWN_MESSAGE
     } RESULT;
+
+    typedef enum {
+        SIMPLE_IDLE = 0,
+        SIMPLE_LOGIN = 1,
+        SIMPLE_LOGOUT = 2
+    } SIMPLE_TASK;
 
     typedef enum {
         DISARM = 0,
@@ -94,6 +100,7 @@ class Texecom {
     bool isReady() { return statePinAreaReady == LOW; }
     ALARM_STATE getState() { return alarmState; }
     void sendTest(const  char *text);
+    void setUDLCode(const char *code);
 
  private:
     bool debugMode = false;
@@ -155,7 +162,7 @@ class Texecom {
 
     bool performLogin = false;
 
-    OPERATION currentTask = IDLE;
+    CRESTRON_TASK currentTask = CRESTRON_IDLE;
 
     uint32_t disarmStartTime;
     const unsigned int disarmTimeout = 10000;  // 10 seconds
@@ -182,7 +189,8 @@ class Texecom {
     char udlCode[7];
     uint32_t simpleProtocolTimeout;
     uint32_t simpleCommandLastSent;
-    bool simpleLoginRequired = false;
+    //bool simpleLoginRequired = false;
+    SIMPLE_TASK simpleTask = SIMPLE_IDLE;
 
     uint8_t triggeredZone = 0;
 

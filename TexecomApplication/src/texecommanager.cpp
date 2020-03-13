@@ -164,8 +164,7 @@ int setDebug(const char *data) {
 }
 
 int setUDL(const char *data) {
-    EEPROM.put(0, data);
-    cloudReset(NULL);
+    texecom.setUDLCode(data);
     return 0;
 }
 

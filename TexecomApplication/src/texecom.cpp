@@ -7,33 +7,52 @@ Texecom::Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*))
     userCount = sizeof(users) / sizeof(char*);
 }
 
+void Texecom::setUDLCode(const char *code) {
+    if (strlen(code) == 6) {
+        strcpy(udlCode, code);
+        EEPROM.put(0, udlCode);
+    }
+    Log.info("New UDL code = %s", udlCode);
+}
+
 void Texecom::sendTest(const char *text) {
     if (strlen(text) == 0) {
-        if (millis() > simpleProtocolTimeout) {
+        if (activeProtocol != SIMPLE) {
             Log.info("Simple login required");
-            simpleLoginRequired = true;
-        } else {
+            simpleTask = SIMPLE_LOGIN;
+        } else if (activeProtocol == SIMPLE) {
             Log.info("Simple login valid");
         }
     } else if (strcmp(text, "STATUS") == 0) {
         Log.info("Requesting arm state");
         requestArmState();
     } else if (strcmp(text, "LOGOUT") == 0) {
+        simpleTask = SIMPLE_LOGOUT;
         texSerial.print("\\H/");
     } else if (strcmp(text, "IDENTITY") == 0) {
         texSerial.print("\\I/");
-    } else if (strcmp(text, "TIME") == 0) {
-        texSerial.print("\\T?/");
-        delay(200);
-        texSerial.print("\\T");
-        texSerial.write(Time.day());
-        texSerial.write(Time.month());
-        texSerial.write(Time.year()-2000);
-        texSerial.write(Time.hour());
-        texSerial.write(Time.minute()-30);
-        texSerial.write("/");
-        delay(200);
-        texSerial.print("\\T?/");
+    } else if (strcmp(text, "FULL-ARM") == 0) {
+        Log.info("Full arming");
+        texSerial.print("\\A");
+        texSerial.write(1);
+        texSerial.print("/");
+    } else if (strcmp(text, "PART-ARM") == 0) {
+        Log.info("Part arming");
+        texSerial.print("\\Y");
+        texSerial.write(1);
+        texSerial.print("/");
+    } else if (text[0] == 'T') {
+        if (strlen(text) == 2 && text[1] == '?') {
+            texSerial.print("\\T?/");
+        } else {
+            texSerial.print("\\T");
+            texSerial.write(Time.day());
+            texSerial.write(Time.month());
+            texSerial.write(Time.year()-2000);
+            texSerial.write(Time.hour());
+            texSerial.write(Time.minute());
+            texSerial.write("/");
+        }
     }
 }
 
@@ -43,7 +62,7 @@ void Texecom::request(COMMAND command) {
 }
 
 void Texecom::disarm(const char *code) {
-    if (currentTask != IDLE) {
+    if (currentTask != CRESTRON_IDLE) {
         Log.info("DISARMING: Request already in progress");
         return;
     }
@@ -52,12 +71,12 @@ void Texecom::disarm(const char *code) {
     else
         return;
     task = DISARM;
-    currentTask = START;
+    currentTask = CRESTRON_START;
     disarmSystem(RESULT_NONE);
 }
 
 void Texecom::arm(const char *code, ARM_TYPE type) {
-    if (currentTask != IDLE) {
+    if (currentTask != CRESTRON_IDLE) {
         Log.info("ARMING: Request already in progress");
         return;
     }
@@ -67,7 +86,7 @@ void Texecom::arm(const char *code, ARM_TYPE type) {
         return;
     armType = type;
     task = ARM;
-    currentTask = START;
+    currentTask = CRESTRON_START;
     armSystem(RESULT_NONE);
 }
 
@@ -141,17 +160,17 @@ void Texecom::processTask(RESULT result) {
 
 void Texecom::disarmSystem(RESULT result) {
     switch (currentTask) {
-        case START :
+        case CRESTRON_START :
             disarmStartTime = millis();
             Log.info("DISARMING: Starting disarm process");
-            currentTask = CONFIRM_ARMED;
+            currentTask = CRESTRON_CONFIRM_ARMED;
             requestArmState();
             break;
 
-        case CONFIRM_ARMED :
+        case CRESTRON_CONFIRM_ARMED :
             if (result == IS_ARMED) {
                 Log.info("DISARMING: Confirmed armed. Confirming idle screen");
-                currentTask = CONFIRM_IDLE_SCREEN;
+                currentTask = CRESTRON_CONFIRM_IDLE_SCREEN;
                 requestScreen();
             } else if (result == IS_DISARMED) {
                 Log.info("DISARMING: System already armed. Aborting");
@@ -161,7 +180,7 @@ void Texecom::disarmSystem(RESULT result) {
             }
             break;
 
-        case CONFIRM_IDLE_SCREEN :
+        case CRESTRON_CONFIRM_IDLE_SCREEN :
             if (
                 result == SCREEN_IDLE ||
                 result == SCREEN_PART_ARMED ||
@@ -169,32 +188,32 @@ void Texecom::disarmSystem(RESULT result) {
                 result == SCREEN_AREA_ENTRY) {
                 Log.info("DISARMING: Idle screen confirmed. Starting login process");
                 performLogin = true;
-                currentTask = LOGIN;
+                currentTask = CRESTRON_LOGIN;
             } else {
                 Log.info("DISARMING: Screen is not idle. Aborting");
                 abortTask();
             }
             break;
 
-        case LOGIN:
+        case CRESTRON_LOGIN:
             if (result == LOGIN_COMPLETE) {
                 Log.info("DISARMING: Login complete. Awaiting confirmed login");
-                currentTask = LOGIN_WAIT;
+                currentTask = CRESTRON_LOGIN_WAIT;
             } else {
                 Log.info("DISARMING: Login failed. Aborting");
                 abortTask();
             }
             break;
 
-        case LOGIN_WAIT :
+        case CRESTRON_LOGIN_WAIT :
             if (result == LOGIN_CONFIRMED) {
                 if (alarmState != PENDING) {
                     Log.info("DISARMING: Login confirmed. Waiting for Disarm prompt");
-                    currentTask = WAIT_FOR_DISARM_PROMPT;
+                    currentTask = CRESTRON_WAIT_FOR_DISARM_PROMPT;
                     delayCommand(COMMAND_SCREEN_STATE, 500);
                 } else {
                     Log.info("DISARMING: Login confirmed. Waiting for Disarm confirmation");
-                    currentTask = DISARM_REQUESTED;
+                    currentTask = CRESTRON_DISARM_REQUESTED;
                 }
             } else {
                 Log.info("DISARMING: Login failed to confirm. Aborting");
@@ -202,23 +221,23 @@ void Texecom::disarmSystem(RESULT result) {
             }
             break;
 
-        case WAIT_FOR_DISARM_PROMPT :
+        case CRESTRON_WAIT_FOR_DISARM_PROMPT :
             if (result == DISARM_PROMPT) {
                 Log.info("DISARMING: Disarm prompt confirmed, disarming");
                 if (!debugMode)
                     texSerial.println("KEYY");  // Yes
 
-                currentTask = DISARM_REQUESTED;
+                currentTask = CRESTRON_DISARM_REQUESTED;
             } else {
                 Log.info("DISARMING: Unexpected result at WAIT_FOR_DISARM_PROMPT. Aborting");
                 abortTask();
             }
             break;
 
-        case DISARM_REQUESTED :
+        case CRESTRON_DISARM_REQUESTED :
             if (result == IS_DISARMED) {
                 Log.info("DISARMING: DISARM CONFIRMED");
-                currentTask = IDLE;
+                currentTask = CRESTRON_IDLE;
                 memset(userPin, 0, sizeof userPin);
                 disarmStartTime = 0;
             } else {
@@ -228,13 +247,13 @@ void Texecom::disarmSystem(RESULT result) {
             break;
     }
 
-    if (result == TASK_TIMEOUT && currentTask != IDLE)
+    if (result == TASK_TIMEOUT && currentTask != CRESTRON_IDLE)
         abortTask();
 }
 
 void Texecom::armSystem(RESULT result) {
     switch (currentTask) {
-        case START :  // Initiate request
+        case CRESTRON_START :  // Initiate request
             if (armType == FULL_ARM)
                 Log.info("ARMING: Starting full arm process");
             else if (armType == NIGHT_ARM)
@@ -244,14 +263,14 @@ void Texecom::armSystem(RESULT result) {
 
             armStartTime = millis();
             Log.info("ARMING: Requesting arm state");
-            currentTask = CONFIRM_DISARMED;
+            currentTask = CRESTRON_CONFIRM_DISARMED;
             requestArmState();
             break;
 
-        case CONFIRM_DISARMED:
+        case CRESTRON_CONFIRM_DISARMED:
             if (result == IS_DISARMED) {
                 Log.info("ARMING: Confirmed disarmed. Confirming idle screen");
-                currentTask = CONFIRM_IDLE_SCREEN;
+                currentTask = CRESTRON_CONFIRM_IDLE_SCREEN;
                 requestScreen();
             } else if (result == IS_ARMED) {
                 Log.info("ARMING: System already armed. Aborting");
@@ -261,31 +280,31 @@ void Texecom::armSystem(RESULT result) {
             }
             break;
 
-        case CONFIRM_IDLE_SCREEN :
+        case CRESTRON_CONFIRM_IDLE_SCREEN :
             if (result == SCREEN_IDLE) {
                 Log.info("ARMING: Idle screen confirmed. Starting login process");
                 performLogin = true;
-                currentTask = LOGIN;
+                currentTask = CRESTRON_LOGIN;
             } else {
                 Log.info("ARMING: Screen is not idle. Aborting");
                 abortTask();
             }
             break;
 
-        case LOGIN:
+        case CRESTRON_LOGIN:
             if (result == LOGIN_COMPLETE) {
                 Log.info("ARMING: Login complete. Awaiting confirmed login");
-                currentTask = LOGIN_WAIT;
+                currentTask = CRESTRON_LOGIN_WAIT;
             } else {
                 Log.info("ARMING: Login failed. Aborting");
                 abortTask();
             }
             break;
 
-        case LOGIN_WAIT :
+        case CRESTRON_LOGIN_WAIT :
             if (result == LOGIN_CONFIRMED) {
                 Log.info("ARMING: Login confirmed. Waiting for Arm prompt");
-                currentTask = WAIT_FOR_ARM_PROMPT;
+                currentTask = CRESTRON_WAIT_FOR_ARM_PROMPT;
                 delayCommand(COMMAND_SCREEN_STATE, 500);
             } else {
                 Log.info("ARMING: Login failed to confirm. Aborting");
@@ -293,16 +312,16 @@ void Texecom::armSystem(RESULT result) {
             }
             break;
 
-        case WAIT_FOR_ARM_PROMPT :
+        case CRESTRON_WAIT_FOR_ARM_PROMPT :
             if (result == FULL_ARM_PROMPT) {
                 if (armType == FULL_ARM) {
                     Log.info("ARMING: Full arm prompt confirmed, completing full arm");
                     if (!debugMode)
                         texSerial.println("KEYY");  // Yes
-                    currentTask = ARM_REQUESTED;
+                    currentTask = CRESTRON_ARM_REQUESTED;
                 } else if (armType == NIGHT_ARM) {
                     Log.info("ARMING: Full arm prompt confirmed, waiting for part arm prompt");
-                    currentTask = WAIT_FOR_PART_ARM_PROMPT;
+                    currentTask = CRESTRON_WAIT_FOR_PART_ARM_PROMPT;
                     texSerial.println("KEYD");  // Down
                     delayCommand(COMMAND_SCREEN_STATE, 500);
                 }
@@ -312,10 +331,10 @@ void Texecom::armSystem(RESULT result) {
             }
             break;
 
-        case WAIT_FOR_PART_ARM_PROMPT :
+        case CRESTRON_WAIT_FOR_PART_ARM_PROMPT :
             if (result == PART_ARM_PROMPT) {
                 Log.info("ARMING: Part arm prompt confirmed, waiting for night arm prompt");
-                currentTask = WAIT_FOR_NIGHT_ARM_PROMPT;
+                currentTask = CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT;
                 texSerial.println("KEYY");  // Yes
                 delayCommand(COMMAND_SCREEN_STATE, 500);
             } else {
@@ -324,22 +343,22 @@ void Texecom::armSystem(RESULT result) {
             }
             break;
 
-        case WAIT_FOR_NIGHT_ARM_PROMPT :
+        case CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT :
             if (result == NIGHT_ARM_PROMPT) {
                 Log.info("ARMING: Night arm prompt confirmed, Completing part arm");
                 if (!debugMode)
                     texSerial.println("KEYY");  // Yes
-                currentTask = ARM_REQUESTED;
+                currentTask = CRESTRON_ARM_REQUESTED;
             } else {
                 Log.info("ARMING: Unexpected result at WAIT_FOR_NIGHT_ARM_PROMPT. Aborting");
                 abortTask();
             }
             break;
 
-        case ARM_REQUESTED :
+        case CRESTRON_ARM_REQUESTED :
             if (result == IS_ARMING) {
                 Log.info("ARMING: ARM CONFIRMED");
-                currentTask = IDLE;
+                currentTask = CRESTRON_IDLE;
                 memset(userPin, 0, sizeof userPin);
                 armStartTime = 0;
                 delayCommand(COMMAND_SCREEN_STATE, 2500);
@@ -350,12 +369,12 @@ void Texecom::armSystem(RESULT result) {
             break;
     }
 
-    if (result == TASK_TIMEOUT && currentTask != IDLE)
+    if (result == TASK_TIMEOUT && currentTask != CRESTRON_IDLE)
         abortTask();
 }
 
 void Texecom::abortTask() {
-    currentTask = IDLE;
+    currentTask = CRESTRON_IDLE;
     texSerial.println("KEYR");
     delayedCommandExecuteTime = 0;
     memset(userPin, 0, sizeof userPin);
@@ -460,7 +479,7 @@ void Texecom::setup() {
     pinMode(pinAreaReady, INPUT);
 
     EEPROM.get(0, udlCode);
-    Log.info(udlCode);
+    Log.info("UDL code = %s", udlCode);
     
     checkDigiOutputs();
 
@@ -529,7 +548,7 @@ void Texecom::loop() {
         // System Disarmed
         } else if (messageLength >= 6 &&
                     strncmp(message, msgDisarmUpdate, strlen(msgDisarmUpdate)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(IS_DISARMED);
         // Entry while armed
         } else if (messageLength == 6 &&
@@ -537,7 +556,7 @@ void Texecom::loop() {
         // System arming
         } else if (messageLength == 6 &&
                     strncmp(message, msgArmingUpdate, strlen(msgArmingUpdate)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(IS_ARMING);
         // Intruder
         } else if (messageLength == 6 &&
@@ -553,17 +572,17 @@ void Texecom::loop() {
             else
                 Log.info("User logged in: Outside of user array size");
 
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(LOGIN_CONFIRMED);
         // Reply to ASTATUS request that the system is disarmed
         } else if (messageLength == 5 &&
                     strncmp(message, msgReplyDisarmed, strlen(msgReplyDisarmed)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(IS_DISARMED);        
         // Reply to ASTATUS request that the system is armed
         } else if (messageLength == 5 &&
                     strncmp(message, msgReplyArmed, strlen(msgReplyArmed)) == 0) {
-            if (currentTask != IDLE) {
+            if (currentTask != CRESTRON_IDLE) {
                 processTask(IS_ARMED);
             }
         } else if (
@@ -573,46 +592,46 @@ void Texecom::loop() {
                     strncmp(message, msgScreenArmedNight, strlen(msgScreenArmedNight)) == 0) ||
                 (messageLength >= strlen(msgScreenIdlePartArmed) &&
                     strncmp(message, msgScreenIdlePartArmed, strlen(msgScreenIdlePartArmed)) == 0)) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(SCREEN_PART_ARMED);
         } else if (messageLength >= strlen(msgScreenArmedFull) &&
                     strncmp(message, msgScreenArmedFull, strlen(msgScreenArmedFull)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(SCREEN_FULL_ARMED);
         } else if (messageLength >= strlen(msgScreenIdle) &&
                     strncmp(message, msgScreenIdle, strlen(msgScreenIdle)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(SCREEN_IDLE);
         // Shown directly after user logs in
         } else if (messageLength > strlen(msgWelcomeBack) &&
                     strncmp(message, msgWelcomeBack, strlen(msgWelcomeBack)) == 0) {
-            if (currentTask == WAIT_FOR_DISARM_PROMPT ||
-                    currentTask == WAIT_FOR_ARM_PROMPT)
+            if (currentTask == CRESTRON_WAIT_FOR_DISARM_PROMPT ||
+                    currentTask == CRESTRON_WAIT_FOR_ARM_PROMPT)
                 delayCommand(COMMAND_SCREEN_STATE, 500);
         // Shown shortly after user logs in
         } else if (messageLength >= strlen(msgScreenQuestionArm) &&
                     strncmp(message, msgScreenQuestionArm, strlen(msgScreenQuestionArm)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(FULL_ARM_PROMPT);
         } else if (messageLength >= strlen(msgScreenQuestionPartArm) &&
                     strncmp(message, msgScreenQuestionPartArm, strlen(msgScreenQuestionPartArm)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(PART_ARM_PROMPT);
         } else if (messageLength >= strlen(msgScreenQuestionNightArm) &&
                     strncmp(message, msgScreenQuestionNightArm, strlen(msgScreenQuestionNightArm)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(NIGHT_ARM_PROMPT);
         } else if (messageLength >= strlen(msgScreenQuestionDisarm) &&
                     strncmp(message, msgScreenQuestionDisarm, strlen(msgScreenQuestionDisarm)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(DISARM_PROMPT);
         } else if (messageLength >= strlen(msgScreenAreainEntry) &&
                     strncmp(message, msgScreenAreainEntry, strlen(msgScreenAreainEntry)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(SCREEN_AREA_ENTRY);
         } else if (messageLength >= strlen(msgScreenAreainExit) &&
             strncmp(message, msgScreenAreainExit, strlen(msgScreenAreainExit)) == 0) {
-            if (currentTask != IDLE)
+            if (currentTask != CRESTRON_IDLE)
                 processTask(SCREEN_AREA_EXIT);
         // Fails to arm. e.g.
         // Zone 012 Active Garage Door
@@ -623,10 +642,19 @@ void Texecom::loop() {
             requestArmState();
         } else if (strcmp(message, "OK") == 0) {
             simpleProtocolTimeout = millis() + 30000;
-            if (simpleLoginRequired) {
+            if (simpleTask == SIMPLE_LOGIN) {
                 Log.info("Simple protocol login confirmed");
-                simpleLoginRequired = false;
+                simpleTask = SIMPLE_IDLE;
                 activeProtocol = SIMPLE;
+            } else if (simpleTask == SIMPLE_LOGOUT) {
+                Log.info("Simple protocol logout confirmed");
+                simpleTask = SIMPLE_IDLE;
+                activeProtocol = CRESTRON;
+            }
+        } else if (strcmp(message, "ERROR") == 0) {
+            if (simpleTask == SIMPLE_LOGIN) {
+                Log.info("Simple login failed");
+                simpleTask = SIMPLE_IDLE;
             }
         } else {
             if (message[0] == '"') {
@@ -640,16 +668,16 @@ void Texecom::loop() {
                 }
             }
 
-            if (currentTask != IDLE && !messageComplete) {
+            if (currentTask != CRESTRON_IDLE && !messageComplete) {
                 if (screenRequestRetryCount++ < 3) {
-                    if (currentTask == CONFIRM_ARMED || currentTask == CONFIRM_DISARMED) {
+                    if (currentTask == CRESTRON_CONFIRM_ARMED || currentTask == CRESTRON_CONFIRM_DISARMED) {
                         Log.info("Retrying arm state request");
                         requestArmState();
-                    } else if (currentTask == CONFIRM_IDLE_SCREEN ||
-                                currentTask == WAIT_FOR_ARM_PROMPT ||
-                                currentTask == WAIT_FOR_DISARM_PROMPT ||
-                                currentTask == WAIT_FOR_PART_ARM_PROMPT ||
-                                currentTask == WAIT_FOR_NIGHT_ARM_PROMPT) {
+                    } else if (currentTask == CRESTRON_CONFIRM_IDLE_SCREEN ||
+                                currentTask == CRESTRON_WAIT_FOR_ARM_PROMPT ||
+                                currentTask == CRESTRON_WAIT_FOR_DISARM_PROMPT ||
+                                currentTask == CRESTRON_WAIT_FOR_PART_ARM_PROMPT ||
+                                currentTask == CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT) {
                         Log.info("Retrying screen request");
                         requestScreen();
                     } else {
@@ -670,7 +698,7 @@ void Texecom::loop() {
             loginPinPosition = 0;
             nextPinEntryTime = 0;
             performLogin = false;
-            if (currentTask != IDLE) {
+            if (currentTask != CRESTRON_IDLE) {
                 processTask(LOGIN_COMPLETE);
             }
         } else {
@@ -678,7 +706,7 @@ void Texecom::loop() {
         }
     }
 
-    if (currentTask == IDLE && alarmState == ARMING &&
+    if (currentTask == CRESTRON_IDLE && alarmState == ARMING &&
         millis() > (lastStateChange + armingTimeout)) {
         Log.info("Arming state timed out. Requesting arm state");
         lastStateChange = millis();
@@ -701,9 +729,9 @@ void Texecom::loop() {
         processTask(TASK_TIMEOUT);
     }
 
-    if ((currentTask == CONFIRM_IDLE_SCREEN || currentTask == WAIT_FOR_ARM_PROMPT ||
-        currentTask == WAIT_FOR_DISARM_PROMPT || currentTask == WAIT_FOR_PART_ARM_PROMPT ||
-        currentTask == WAIT_FOR_NIGHT_ARM_PROMPT)
+    if ((currentTask == CRESTRON_CONFIRM_IDLE_SCREEN || currentTask == CRESTRON_WAIT_FOR_ARM_PROMPT ||
+        currentTask == CRESTRON_WAIT_FOR_DISARM_PROMPT || currentTask == CRESTRON_WAIT_FOR_PART_ARM_PROMPT ||
+        currentTask == CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT)
         && bufferPosition == 0 && delayedCommandExecuteTime == 0 && millis() > (lastCommandTime+commandWaitTimeout) && commandAttempts < maxRetries) {
         Log.info("commandWaitTimeout: Retrying request screen");
         commandAttempts++;
@@ -711,7 +739,7 @@ void Texecom::loop() {
     }
 
     // Switch to the Simple Protocol
-    if (simpleLoginRequired && millis() > (simpleCommandLastSent+500)) {
+    if (simpleTask == SIMPLE_LOGIN && millis() > (simpleCommandLastSent+500)) {
         Log.info("Performing simple login");
         simpleCommandLastSent = millis();
         texSerial.print("\\W");
@@ -720,8 +748,8 @@ void Texecom::loop() {
     }
 
     // Auto-logout of the Simple Protocol. Should never be required.
-    if (activeProtocol == SIMPLE && millis() > simpleProtocolTimeout) {
-        activeProtocol = CRESTRON;
+    if (millis() > simpleProtocolTimeout && activeProtocol == SIMPLE && simpleTask == SIMPLE_IDLE) {
+        simpleTask = SIMPLE_LOGOUT;
         texSerial.print("\\H/");
         Log.info("Simple Protocol timeout");
     }
