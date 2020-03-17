@@ -9,6 +9,12 @@
 
 class Texecom {
  public:
+
+    struct SAVE_DATA {
+        bool isDebug;
+        char udlCode[7];
+    };
+
     typedef enum {
         DISARMED = 0,
         ARMED_HOME = 1,
@@ -21,17 +27,17 @@ class Texecom {
     } ALARM_STATE;
 
     typedef enum {
-        COMMAND_ARMED_STATE = 0,
-        COMMAND_SCREEN_STATE = 1
-    } COMMAND;
-
-    typedef enum {
         ALARM_STATE_CHANGE = 0,
         ZONE_STATE_CHANGE = 1,
         ALARM_TRIGGERED = 2,
         ALARM_READY_CHANGE = 3,
         SEND_MESSAGE = 4
     } CALLBACK_TYPE;
+
+    typedef enum {
+        COMMAND_ARMED_STATE = 0,
+        COMMAND_SCREEN_STATE = 1
+    } CRESTRON_COMMAND;
 
     typedef enum {
         CRESTRON_IDLE,
@@ -47,38 +53,44 @@ class Texecom {
         CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT,
         CRESTRON_ARM_REQUESTED,
         CRESTRON_DISARM_REQUESTED
-    } CRESTRON_TASK;
+    } CRESTRON_STEP;
 
     typedef enum {
-        RESULT_NONE,
-        TASK_TIMEOUT,
-        IS_ARMED,
-        IS_DISARMED,
-        SCREEN_IDLE,
-        SCREEN_PART_ARMED,
-        SCREEN_FULL_ARMED,
-        SCREEN_AREA_ENTRY,
-        SCREEN_AREA_EXIT,
-        LOGIN_COMPLETE,
-        LOGIN_CONFIRMED,
-        FULL_ARM_PROMPT,
-        PART_ARM_PROMPT,
-        NIGHT_ARM_PROMPT,
-        DISARM_PROMPT,
-        IS_ARMING,
-        UNKNOWN_MESSAGE
-    } RESULT;
+        CRESTRON_RESULT_NONE,
+        CRESTRON_TASK_TIMEOUT,
+        CRESTRON_IS_ARMED,
+        CRESTRON_IS_DISARMED,
+        CRESTRON_SCREEN_IDLE,
+        CRESTRON_SCREEN_PART_ARMED,
+        CRESTRON_SCREEN_FULL_ARMED,
+        CRESTRON_SCREEN_AREA_ENTRY,
+        CRESTRON_SCREEN_AREA_EXIT,
+        CRESTRON_LOGIN_COMPLETE,
+        CRESTRON_LOGIN_CONFIRMED,
+        CRESTRON_FULL_ARM_PROMPT,
+        CRESTRON_PART_ARM_PROMPT,
+        CRESTRON_NIGHT_ARM_PROMPT,
+        CRESTRON_DISARM_PROMPT,
+        CRESTRON_IS_ARMING,
+        CRESTRON_UNKNOWN_MESSAGE
+    } CRESTRON_RESULT;
+
+    typedef enum {
+        CRESTRON_DISARM = 0,
+        CRESTRON_ARM = 1
+    } CRESTRON_TASK;
 
     typedef enum {
         SIMPLE_IDLE = 0,
         SIMPLE_LOGIN = 1,
         SIMPLE_LOGOUT = 2
-    } SIMPLE_TASK;
+    } SIMPLE_STEP;
 
     typedef enum {
-        DISARM = 0,
-        ARM = 1
-    } TASK_TYPE;
+        SIMPLE_OK,
+        SIMPLE_ERROR,
+        SIMPLE_LOGIN_TIMEOUT
+    } SIMPLE_RESULT;
     
     typedef enum {
         FULL_ARM = 0,
@@ -96,26 +108,27 @@ class Texecom {
     void loop();
     void disarm(const char *code);
     void arm(const char *code, ARM_TYPE type);
-    void setDebug(bool enabled) { debugMode = enabled; }
+    void setDebug(bool enabled);
     bool isReady() { return statePinAreaReady == LOW; }
     ALARM_STATE getState() { return alarmState; }
     void sendTest(const  char *text);
     void setUDLCode(const char *code);
 
  private:
-    bool debugMode = false;
     void requestArmState();
     void requestScreen();
-    void processTask(RESULT result);
-    void armSystem(RESULT result);
-    void disarmSystem(RESULT result);
+    void processCrestronTask(CRESTRON_RESULT result);
+    void armSystem(CRESTRON_RESULT result);
+    void disarmSystem(CRESTRON_RESULT result);
     void abortTask();
-    void request(COMMAND command);
+    void request(CRESTRON_COMMAND command);
     void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*);
-    void delayCommand(COMMAND command, int delay);
+    void delayCommand(CRESTRON_COMMAND command, int delay);
     void updateAlarmState(ALARM_STATE alarmState);
     void updateZoneState(char *message);
     void checkDigiOutputs();
+    bool processCrestronMessage(char *message);
+    bool processSimpleMessage(char *message);
 
     const char *msgZoneUpdate = "\"Z0";
     const char *msgArmUpdate = "\"A0";
@@ -149,9 +162,9 @@ class Texecom {
     const char *users[4] = {"root", "Kevin", "Nicki", "Mumma"};
 
     PROTOCOL activeProtocol = CRESTRON;
-    TASK_TYPE task;
+    CRESTRON_TASK currentTask;
     ARM_TYPE armType;
-    COMMAND delayedCommand;
+    CRESTRON_COMMAND delayedCommand;
     uint32_t delayedCommandExecuteTime = 0;
     const char *commandStrings[2] = {"ASTATUS", "LSTATUS"};
     const uint8_t maxMessageSize = 100;
@@ -160,9 +173,7 @@ class Texecom {
     uint8_t bufferPosition;
     uint8_t screenRequestRetryCount = 0;
 
-    bool performLogin = false;
-
-    CRESTRON_TASK currentTask = CRESTRON_IDLE;
+    CRESTRON_STEP crestronTask = CRESTRON_IDLE;
 
     uint32_t disarmStartTime;
     const unsigned int disarmTimeout = 10000;  // 10 seconds
@@ -185,12 +196,10 @@ class Texecom {
 
     uint32_t messageStart;
 
-
-    char udlCode[7];
+    SAVE_DATA savedData;
     uint32_t simpleProtocolTimeout;
     uint32_t simpleCommandLastSent;
-    //bool simpleLoginRequired = false;
-    SIMPLE_TASK simpleTask = SIMPLE_IDLE;
+    SIMPLE_STEP simpleStep = SIMPLE_IDLE;
 
     uint8_t triggeredZone = 0;
 
