@@ -40,7 +40,7 @@ class Texecom {
     } CRESTRON_COMMAND;
 
     typedef enum {
-        CRESTRON_IDLE,
+        // CRESTRON_IDLE,
         CRESTRON_START,
         CRESTRON_CONFIRM_ARMED,
         CRESTRON_CONFIRM_DISARMED,
@@ -52,8 +52,10 @@ class Texecom {
         CRESTRON_WAIT_FOR_PART_ARM_PROMPT,
         CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT,
         CRESTRON_ARM_REQUESTED,
-        CRESTRON_DISARM_REQUESTED
-    } CRESTRON_STEP;
+        CRESTRON_DISARM_REQUESTED,
+        SIMPLE_LOGIN,
+        SIMPLE_LOGOUT,
+    } TASK_STEP;
 
     typedef enum {
         CRESTRON_RESULT_NONE,
@@ -72,26 +74,24 @@ class Texecom {
         CRESTRON_NIGHT_ARM_PROMPT,
         CRESTRON_DISARM_PROMPT,
         CRESTRON_IS_ARMING,
-        CRESTRON_UNKNOWN_MESSAGE
-    } CRESTRON_RESULT;
-
-    typedef enum {
-        CRESTRON_DISARM = 0,
-        CRESTRON_ARM = 1
-    } CRESTRON_TASK;
-
-    typedef enum {
-        SIMPLE_IDLE = 0,
-        SIMPLE_LOGIN = 1,
-        SIMPLE_LOGOUT = 2
-    } SIMPLE_STEP;
-
-    typedef enum {
+        CRESTRON_UNKNOWN_MESSAGE,
         SIMPLE_OK,
         SIMPLE_ERROR,
         SIMPLE_LOGIN_TIMEOUT
-    } SIMPLE_RESULT;
+    } TASK_STEP_RESULT;
+
+    typedef enum {
+        CRESTRON_IDLE = 0,
+        CRESTRON_DISARM = 1,
+        CRESTRON_ARM = 2
+    } CRESTRON_TASK;
     
+    typedef enum {
+        SIMPLE_IDLE = 0,
+        SIMPLE_CHECK_TIME = 1,
+        SIMPLE_SET_TIME = 2
+    } SIMPLE_TASK;
+
     typedef enum {
         FULL_ARM = 0,
         NIGHT_ARM = 1
@@ -117,9 +117,9 @@ class Texecom {
  private:
     void requestArmState();
     void requestScreen();
-    void processCrestronTask(CRESTRON_RESULT result);
-    void armSystem(CRESTRON_RESULT result);
-    void disarmSystem(CRESTRON_RESULT result);
+    void processTask(TASK_STEP_RESULT result);
+    void armSystem(TASK_STEP_RESULT result);
+    void disarmSystem(TASK_STEP_RESULT result);
     void abortTask();
     void request(CRESTRON_COMMAND command);
     void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*);
@@ -158,11 +158,12 @@ class Texecom {
     const char *msgScreenAreainEntry = "\"Area in Entry";
     const char *msgScreenAreainExit = "\"Area in Exit >";
 
-    uint8_t userCount;  // This is set dynamically at class initialisation
-    const char *users[4] = {"root", "Kevin", "Nicki", "Mumma"};
+    static const uint8_t userCount = 4;
+    const char *users[userCount] = {"root", "Kevin", "Nicki", "Mumma"};
 
     PROTOCOL activeProtocol = CRESTRON;
-    CRESTRON_TASK currentTask;
+    CRESTRON_TASK crestronTask = CRESTRON_IDLE;
+    SIMPLE_TASK simpleTask = SIMPLE_IDLE;
     ARM_TYPE armType;
     CRESTRON_COMMAND delayedCommand;
     uint32_t delayedCommandExecuteTime = 0;
@@ -173,7 +174,7 @@ class Texecom {
     uint8_t bufferPosition;
     uint8_t screenRequestRetryCount = 0;
 
-    CRESTRON_STEP crestronTask = CRESTRON_IDLE;
+    TASK_STEP taskStep = CRESTRON_START;
 
     uint32_t disarmStartTime;
     const unsigned int disarmTimeout = 10000;  // 10 seconds
@@ -199,7 +200,6 @@ class Texecom {
     SAVE_DATA savedData;
     uint32_t simpleProtocolTimeout;
     uint32_t simpleCommandLastSent;
-    SIMPLE_STEP simpleStep = SIMPLE_IDLE;
 
     uint8_t triggeredZone = 0;
 
