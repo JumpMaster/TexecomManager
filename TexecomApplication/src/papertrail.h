@@ -41,6 +41,8 @@ private:
     void log(String message);
     static IPAddress resolve(const char *host);
     static const uint16_t kLocalPort;
+    uint32_t lastMessageSent;
+    uint8_t messageTokens = 10;
 
 protected:
     virtual void logMessage(const char *msg, LogLevel level, const char *category, const LogAttributes &attr) override;

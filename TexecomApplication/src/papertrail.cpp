@@ -85,6 +85,23 @@ void PapertrailLogHandler::logMessage(const char *msg, LogLevel level, const cha
       return;
     }
 
+    //
+    //  Rate limit to 10 logs per second
+    //
+    messageTokens += (millis() - lastMessageSent) / 100;
+    if (messageTokens > 10)
+        messageTokens = 10;
+    
+    if (messageTokens == 0)
+        return;
+    else
+        messageTokens--;
+    
+    lastMessageSent = millis();
+    //
+    //
+    //
+
     String s;
 
     if (category) {
