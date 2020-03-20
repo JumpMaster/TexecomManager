@@ -162,7 +162,7 @@ void Texecom::processTask(TASK_STEP_RESULT result) {
 
     if (crestronTask == CRESTRON_ARM) {
         armSystem(result);
-    } else if (crestronTask == CRESTRON_ARM) {
+    } else if (crestronTask == CRESTRON_DISARM) {
         disarmSystem(result);
     }
 }
@@ -542,11 +542,11 @@ bool Texecom::processCrestronMessage(char *message) {
 
 bool Texecom::processSimpleMessage(char *message) {
     if (strcmp(message, "OK") == 0) {
-        simpleProtocolTimeout = millis() + 30000;
         if (taskStep == SIMPLE_LOGIN) {
             Log.info("Simple protocol login confirmed");
             simpleTask = SIMPLE_IDLE;
             activeProtocol = SIMPLE;
+            simpleProtocolTimeout = millis() + 30000;
         } else if (taskStep == SIMPLE_LOGOUT) {
             Log.info("Simple protocol logout confirmed");
             simpleTask = SIMPLE_IDLE;
@@ -811,6 +811,7 @@ void Texecom::loop() {
     // SWITCH TO SIMPLE PROTOCOL BY SENDING
     // THE UDL CODE AS \W1234/ TWICE
     if (simpleTask != SIMPLE_IDLE && taskStep == SIMPLE_LOGIN && millis() > (simpleCommandLastSent+500)) {
+        // TODO: This needs to error if there are too many login attempts
         Log.info("Performing simple login");
         simpleCommandLastSent = millis();
         texSerial.print("\\W");
@@ -820,6 +821,8 @@ void Texecom::loop() {
 
     // Auto-logout of the Simple Protocol. Should never be required.
     if (millis() > simpleProtocolTimeout && activeProtocol == SIMPLE) {
+        // TODO: Force a timeout if this runs twice. If taskStep = SIMPLE_LOGOUT?
+        simpleProtocolTimeout = millis() + 10000;
         taskStep = SIMPLE_LOGOUT;
         texSerial.print("\\H/");
         Log.info("Simple Protocol timeout");
