@@ -53,6 +53,8 @@ class Texecom {
         CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT,
         CRESTRON_ARM_REQUESTED,
         CRESTRON_DISARM_REQUESTED,
+        SIMPLE_START,
+        SIMPLE_TIME_REQUEST,
         SIMPLE_LOGIN,
         SIMPLE_LOGOUT,
     } TASK_STEP;
@@ -127,8 +129,10 @@ class Texecom {
     void updateAlarmState(ALARM_STATE alarmState);
     void updateZoneState(char *message);
     void checkDigiOutputs();
-    bool processCrestronMessage(char *message);
-    bool processSimpleMessage(char *message);
+    bool processCrestronMessage(char *message, uint8_t messageLength);
+    bool processSimpleMessage(char *message, uint8_t messageLength);
+    void sendSimpleMessage(const char *text, uint8_t length);
+    bool checkSimpleChecksum(const char *text, uint8_t length);
 
     const char *msgZoneUpdate = "\"Z0";
     const char *msgArmUpdate = "\"A0";

@@ -28,42 +28,65 @@ void Texecom::sendTest(const char *text) {
         requestArmState();
     } else if (strcmp(text, "LOGOUT") == 0) {
         taskStep = SIMPLE_LOGOUT;
-        texSerial.print("\\H/");
+        sendSimpleMessage("\\H/", 3);
     } else if (strcmp(text, "IDENTITY") == 0) {
-        texSerial.print("\\I/");
+        sendSimpleMessage("\\I/", 3);
     } else if (strcmp(text, "FULL-ARM") == 0) {
         Log.info("Full arming");
-        texSerial.print("\\A");
-        texSerial.write(1);
-        texSerial.print("/");
+        char *armMessage = "\\A\x1/";
+        sendSimpleMessage(armMessage, 4);
     } else if (strcmp(text, "PART-ARM") == 0) {
         Log.info("Part arming");
-        texSerial.print("\\Y");
-        texSerial.write(1);
-        texSerial.print("/");
+        char *armMessage = "\\Y\x1/";
+        sendSimpleMessage(armMessage, 4);
     } else if (text[0] == 'T') {
         if (strlen(text) == 2 && text[1] == '?') {
-            texSerial.print("\\T?/");
+            sendSimpleMessage("\\T?/", 4);
         } else {
-            texSerial.print("\\T");
-            texSerial.write(Time.day());
-            texSerial.write(Time.month());
-            texSerial.write(Time.year()-2000);
-            texSerial.write(Time.hour());
-            texSerial.write(Time.minute());
-            texSerial.write("/");
+            char setTimeMsg[8];
+            setTimeMsg[0] = '\\';
+            setTimeMsg[1] = 'T';
+            setTimeMsg[2] = Time.day();
+            setTimeMsg[3] = Time.month();
+            setTimeMsg[4] = Time.year()-2000;
+            setTimeMsg[5] = Time.hour();
+            setTimeMsg[6] = Time.minute();
+            setTimeMsg[7] = '/';
+            sendSimpleMessage(setTimeMsg, 8);
         }
     } else if (strcmp(text, "ZONE") == 0) {
-        texSerial.print("\\Z");
-        texSerial.write(11);
-        texSerial.write(1);
-        texSerial.print("/");
+        char *zoneMessage = "\\Z\xb\x5/"; //  \ Z 11 5 /
+        sendSimpleMessage(zoneMessage, 5);
     }
 }
 
 void Texecom::setDebug(bool enabled) {
     savedData.isDebug = enabled;
     EEPROM.put(0, savedData);
+}
+
+void Texecom::sendSimpleMessage(const char *text, uint8_t length) {
+    unsigned int a = 0;
+    for (unsigned int i = 0; i < length; i++) {
+        a += text[i];
+        texSerial.write(text[i]);
+        // Log.info("Message: %d", text[i]);
+    }
+    char checksum = (a ^ 255) % 0x100;
+    texSerial.write(checksum);
+    // Log.info("Message: %d", checksum);
+}
+
+bool Texecom::checkSimpleChecksum(const char *text, uint8_t length) {
+    unsigned int a = 0;
+    for (unsigned int i = 0; i < length; i++) {
+        a += text[i];
+        // texSerial.write(text[i]);
+        // Log.info("Message: %d", text[i]);
+    }
+    char checksum = (a ^ 255) % 0x100;
+    // texSerial.write(checksum);
+    return checksum == text[length];
 }
 
 void Texecom::request(CRESTRON_COMMAND command) {
@@ -397,9 +420,8 @@ void Texecom::abortTask() {
     commandAttempts = 0;
 }
 
-bool Texecom::processCrestronMessage(char *message) {
+bool Texecom::processCrestronMessage(char *message, uint8_t messageLength) {
 
-    uint8_t messageLength = strlen(message);
     // Zone state changed
     if (messageLength == 6 &&
         strncmp(message, msgZoneUpdate, strlen(msgZoneUpdate)) == 0) {
@@ -540,8 +562,8 @@ bool Texecom::processCrestronMessage(char *message) {
     return false;
 }
 
-bool Texecom::processSimpleMessage(char *message) {
-    if (strcmp(message, "OK") == 0) {
+bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
+    if (strncmp(message, "OK", 2) == 0) {
         if (taskStep == SIMPLE_LOGIN) {
             Log.info("Simple protocol login confirmed");
             simpleTask = SIMPLE_IDLE;
@@ -553,7 +575,7 @@ bool Texecom::processSimpleMessage(char *message) {
             activeProtocol = CRESTRON;
         }
         return true;
-    } else if (strcmp(message, "ERROR") == 0) {
+    } else if (strncmp(message, "ERROR", 5) == 0) {
         if (taskStep == SIMPLE_LOGIN) {
             Log.info("Simple login failed");
             simpleTask = SIMPLE_IDLE;
@@ -668,45 +690,63 @@ void Texecom::setup() {
 void Texecom::loop() {
     bool messageReady = false;
     bool messageComplete = true;
+    uint8_t messageLength = 0;
 
     // Read incoming serial data if available and copy to TCP port
     while (texSerial.available() > 0) {
         int incomingByte = texSerial.read();
+        // Log.info("%d", incomingByte);
         if (bufferPosition == 0)
             messageStart = millis();
 
+        // Will never happen but just in case
         if (bufferPosition >= maxMessageSize) {
             memcpy(message, buffer, bufferPosition);
             message[bufferPosition] = '\0';
             messageReady = true;
+            messageLength = bufferPosition;
             bufferPosition = 0;
             break;
-        } else if (bufferPosition > 0 && incomingByte == '\"') {
-            Log.info("Double message incoming?");
-            memcpy(message, buffer, bufferPosition);
-            message[bufferPosition] = '\0';
-            messageReady = true;
-            buffer[0] = incomingByte;
-            bufferPosition = 1;
-            messageStart = millis();
-            break;
-        } else if (incomingByte != 10 && incomingByte != 13) {
+        // 13+10 (CRLF) signifies the end of message
+        } else if (bufferPosition > 2 &&
+                   incomingByte == 10 &&
+                   buffer[bufferPosition-1] == 13) {
+            
+            if (activeProtocol == SIMPLE || taskStep == SIMPLE_LOGIN) {
+                if (checkSimpleChecksum(buffer, bufferPosition-2)) {
+                    Log.info("Checksum valid");
+                    buffer[bufferPosition-2] = '\0'; // Overwrite the checksum
+                    memcpy(message, buffer, bufferPosition-1);
+                    // message[bufferPosition-2] = '\0'; // Replace 13 with termination
+                    messageReady = true;
+                    messageLength = bufferPosition-2;
+                    bufferPosition = 0;
+                    screenRequestRetryCount = 0;
+                    break;
+                } else {
+                    buffer[bufferPosition++] = incomingByte;
+                }
+            } else {
+                buffer[bufferPosition-1] = '\0'; // Replace 13 with termination
+                memcpy(message, buffer, bufferPosition);
+                // message[bufferPosition-1] = '\0'; // Replace 13 with termination
+                messageReady = true;
+                messageLength = bufferPosition-1;
+                bufferPosition = 0;
+                screenRequestRetryCount = 0;
+                break;
+            }
+        } else {
             buffer[bufferPosition++] = incomingByte;
-        } else if (bufferPosition > 0) {
-            memcpy(message, buffer, bufferPosition);
-            message[bufferPosition] = '\0';
-            messageReady = true;
-            screenRequestRetryCount = 0;
-            bufferPosition = 0;
-            break;
         }
-    }
+    } // while (texSerial.available() > 0)
 
-    if (bufferPosition > 0 && millis() > (messageStart+100)) {
-        Log.info("Message failed to receive within 100ms");
+    if (bufferPosition > 0 && millis() > (messageStart+20)) {
+        Log.info("Message failed to receive within 20ms");
         memcpy(message, buffer, bufferPosition);
         message[bufferPosition] = '\0';
         messageReady = true;
+        messageLength = bufferPosition;
         messageComplete = false;
         bufferPosition = 0;
     }
@@ -716,9 +756,9 @@ void Texecom::loop() {
 
         bool processedSuccessfully = false;
         if (activeProtocol == SIMPLE || taskStep == SIMPLE_LOGIN) {
-            processedSuccessfully = processSimpleMessage(message);
+            processedSuccessfully = processSimpleMessage(message, messageLength);
         } else if (activeProtocol == CRESTRON) {
-            processedSuccessfully = processCrestronMessage(message);
+            processedSuccessfully = processCrestronMessage(message, messageLength);
         }
 
         if (!processedSuccessfully) {
@@ -726,11 +766,11 @@ void Texecom::loop() {
                 Log.info(String::format("Unknown Crestron command - %s", message));
             } else {
                 Log.info("Unknown non-Crestron command - %s", message);
-                if (message[0] < 64 || message[0] > 126) {
-                    for (uint8_t i = 0; i < strlen(message); i++) {
+                // if (message[0] < 64 || message[0] > 126) {
+                    for (uint8_t i = 0; i < messageLength; i++) { //strlen(message); i++) {
                         Log.info("%d\n", message[i]);
                     }
-                }
+                // }
             }
 
             if (crestronTask != CRESTRON_IDLE && !messageComplete) {
@@ -814,18 +854,29 @@ void Texecom::loop() {
         // TODO: This needs to error if there are too many login attempts
         Log.info("Performing simple login");
         simpleCommandLastSent = millis();
-        texSerial.print("\\W");
-        texSerial.print(savedData.udlCode);
-        texSerial.print("/");
+
+        char loginData[9];
+        loginData[0] = '\\';
+        loginData[1] = 'W';
+        for (int i = 0; i < 6; i++)
+            loginData[2+i] = savedData.udlCode[i];
+        loginData[8] = '/';
+
+        sendSimpleMessage(loginData, 9);
     }
 
     // Auto-logout of the Simple Protocol. Should never be required.
     if (millis() > simpleProtocolTimeout && activeProtocol == SIMPLE) {
-        // TODO: Force a timeout if this runs twice. If taskStep = SIMPLE_LOGOUT?
         simpleProtocolTimeout = millis() + 10000;
-        taskStep = SIMPLE_LOGOUT;
-        texSerial.print("\\H/");
-        Log.info("Simple Protocol timeout");
+        if (taskStep != SIMPLE_LOGOUT) {
+            taskStep = SIMPLE_LOGOUT;
+            sendSimpleMessage("\\H/", 3);
+            Log.info("Simple Protocol timeout");
+        } else {
+            activeProtocol = CRESTRON;
+            simpleTask = SIMPLE_IDLE;
+            Log.info("Simple logout failed and was forced");
+        }
     }
 
     checkDigiOutputs();

@@ -42,7 +42,8 @@ private:
     static IPAddress resolve(const char *host);
     static const uint16_t kLocalPort;
     uint32_t lastMessageSent;
-    uint8_t messageTokens = 10;
+    const uint8_t maxTokens = 20;
+    uint8_t messageTokens = maxTokens;
 
 protected:
     virtual void logMessage(const char *msg, LogLevel level, const char *category, const LogAttributes &attr) override;
