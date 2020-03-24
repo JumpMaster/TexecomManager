@@ -624,19 +624,29 @@ bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
         }
         return true;
     } else if (taskStep == SIMPLE_REQUEST_TIME && messageLength == 5) {
-        // Do something here to check the time and push time ok/not to process task
-        if (message[0] == Time.day() &&
-            message[1] == Time.month() &&
-            message[2] == Time.year()-2000 &&
-            message[3] == Time.hour() &&
-            message[4] == Time.minute()) {
+        struct tm t;
+        t.tm_mday = message[0];     // Day of the month
+        t.tm_mon = message[1]-1;    // Month, where 0 = Jan
+        t.tm_year = message[2]+100; // Short Year + 100
+        t.tm_hour = message[3];     // Hours
+        t.tm_min = message[4];      // Minutes
+        t.tm_sec = 0;               // Seconds
+        t.tm_isdst = 0;             // Is DST on? 1 = yes, 0 = no, -1 = unknown
+            
+        uint32_t alarmTime = mktime(&t);
+        uint32_t localTime = Time.local();
+        
+        if (localTime+120 > alarmTime && localTime-120 < alarmTime) {
             processTask(SIMPLE_TIME_CHECK_OK);
+            return true;
         } else {
             processTask(SIMPLE_TIME_CHECK_OUT);
+            return true;
         }
         processTask(UNKNOWN_MESSAGE);
-        return true;
+        return false;
     }
+    Log.info ("Unknown simple message rejected");
     processTask(UNKNOWN_MESSAGE);
     return false;
 }
@@ -796,8 +806,8 @@ void Texecom::loop() {
         }
     } // while (texSerial.available() > 0)
 
-    if (bufferPosition > 0 && millis() > (messageStart+20)) {
-        Log.info("Message failed to receive within 20ms");
+    if (bufferPosition > 0 && millis() > (messageStart+50)) {
+        Log.info("Message failed to receive within 50ms");
         memcpy(message, buffer, bufferPosition);
         message[bufferPosition] = '\0';
         messageReady = true;
