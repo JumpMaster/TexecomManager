@@ -57,6 +57,10 @@ void Texecom::sendTest(const char *text) {
     } else if (strcmp(text, "ZONE") == 0) {
         const char *zoneMessage = "\\Z\xb\x5/"; //  \ Z 11 5 /
         sendSimpleMessage(zoneMessage, 5);
+    } else if (strcmp(text, "CHECK") == 0) {
+        simpleTask = SIMPLE_CHECK_TIME;
+        taskStep = SIMPLE_START;
+        checkTime(RESULT_NONE);
     }
 }
 
@@ -102,7 +106,7 @@ void Texecom::disarm(const char *code) {
         return;
     crestronTask = CRESTRON_DISARM;
     taskStep = CRESTRON_START;
-    disarmSystem(CRESTRON_RESULT_NONE);
+    disarmSystem(RESULT_NONE);
 }
 
 void Texecom::arm(const char *code, ARM_TYPE type) {
@@ -117,7 +121,7 @@ void Texecom::arm(const char *code, ARM_TYPE type) {
     armType = type;
     crestronTask = CRESTRON_ARM;
     taskStep = CRESTRON_START;
-    armSystem(CRESTRON_RESULT_NONE);
+    armSystem(RESULT_NONE);
 }
 
 void Texecom::requestArmState() {
@@ -180,14 +184,16 @@ void Texecom::processTask(TASK_STEP_RESULT result) {
     if (result == CRESTRON_TASK_TIMEOUT)
         Log.info("processTask: Task timed out");
 
-    if (activeProtocol == CRESTRON) {
+    if (activeProtocol == SIMPLE || taskStep == SIMPLE_LOGIN) {
+        if (simpleTask == SIMPLE_CHECK_TIME) {
+            checkTime(result);
+        }
+    } else if (activeProtocol == CRESTRON) {
         if (crestronTask == CRESTRON_ARM) {
             armSystem(result);
         } else if (crestronTask == CRESTRON_DISARM) {
             disarmSystem(result);
         }
-    } else if (activeProtocol == SIMPLE) {
-
     }
 }
 
@@ -390,7 +396,6 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
         case CRESTRON_ARM_REQUESTED :
             if (result == CRESTRON_IS_ARMING) {
                 Log.info("ARMING: ARM CONFIRMED");
-                // taskStep = CRESTRON_IDLE;
                 crestronTask = CRESTRON_IDLE;
                 memset(userPin, 0, sizeof userPin);
                 armStartTime = 0;
@@ -403,6 +408,50 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
 
     if (result == CRESTRON_TASK_TIMEOUT && crestronTask != CRESTRON_IDLE)
         abortTask();
+}
+
+void Texecom::checkTime(TASK_STEP_RESULT result) {
+    switch (taskStep) {
+        case SIMPLE_START :  // Initiate request
+            Log.info("Starting time check");
+            if (activeProtocol != SIMPLE) {
+                Log.info("Simple login required");
+                taskStep = SIMPLE_LOGIN;
+            }
+            break;
+        case SIMPLE_LOGIN :
+            if (result == SIMPLE_OK) {
+                Log.info("Simple login confirmed, requesting time");
+                activeProtocol = SIMPLE;
+                simpleProtocolTimeout = millis() + 30000;
+                sendSimpleMessage("\\T?/", 4);
+                taskStep = SIMPLE_REQUEST_TIME;
+            } else {
+                Log.info("Uh oh 1 - %d", result);
+            }
+            break;
+        case SIMPLE_REQUEST_TIME :
+            if (result == SIMPLE_TIME_CHECK_OK) {
+                Log.info("Time ok, logging out");
+            } else if (result == SIMPLE_TIME_CHECK_OUT) {
+                Log.info("Time out, logging out");
+            } else {
+                Log.info("Uh oh 2 - %d", result);
+            }
+            sendSimpleMessage("\\H/", 3);
+            taskStep = SIMPLE_LOGOUT;
+
+            break;
+        case SIMPLE_LOGOUT :
+            if (result == SIMPLE_OK) {
+                Log.info("Logout confirmed");
+                activeProtocol = CRESTRON;
+                simpleTask = SIMPLE_IDLE;
+            } else {
+                Log.info("Uh oh 3 - %d", result);
+            }
+            break;
+    }
 }
 
 void Texecom::abortTask() {
@@ -563,25 +612,32 @@ bool Texecom::processCrestronMessage(char *message, uint8_t messageLength) {
 }
 
 bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
+
     if (strncmp(message, "OK", 2) == 0) {
-        if (taskStep == SIMPLE_LOGIN) {
-            Log.info("Simple protocol login confirmed");
-            simpleTask = SIMPLE_IDLE;
-            activeProtocol = SIMPLE;
-            simpleProtocolTimeout = millis() + 30000;
-        } else if (taskStep == SIMPLE_LOGOUT) {
-            Log.info("Simple protocol logout confirmed");
-            simpleTask = SIMPLE_IDLE;
-            activeProtocol = CRESTRON;
+        if (simpleTask != SIMPLE_IDLE) {
+            processTask(SIMPLE_OK);
         }
         return true;
     } else if (strncmp(message, "ERROR", 5) == 0) {
-        if (taskStep == SIMPLE_LOGIN) {
-            Log.info("Simple login failed");
-            simpleTask = SIMPLE_IDLE;
+        if (simpleTask != SIMPLE_IDLE) {
+            processTask(SIMPLE_OK);
         }
         return true;
+    } else if (taskStep == SIMPLE_REQUEST_TIME && messageLength == 5) {
+        // Do something here to check the time and push time ok/not to process task
+        if (message[0] == Time.day() &&
+            message[1] == Time.month() &&
+            message[2] == Time.year()-2000 &&
+            message[3] == Time.hour() &&
+            message[4] == Time.minute()) {
+            processTask(SIMPLE_TIME_CHECK_OK);
+        } else {
+            processTask(SIMPLE_TIME_CHECK_OUT);
+        }
+        processTask(UNKNOWN_MESSAGE);
+        return true;
     }
+    processTask(UNKNOWN_MESSAGE);
     return false;
 }
 
@@ -789,7 +845,7 @@ void Texecom::loop() {
                     }
                 }
             } else {
-                processTask(CRESTRON_UNKNOWN_MESSAGE);
+                processTask(UNKNOWN_MESSAGE);
             }
         }
     }
@@ -876,6 +932,5 @@ void Texecom::loop() {
             Log.info("Simple logout failed and was forced");
         }
     }
-
     checkDigiOutputs();
 }
