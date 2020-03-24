@@ -33,11 +33,11 @@ void Texecom::sendTest(const char *text) {
         sendSimpleMessage("\\I/", 3);
     } else if (strcmp(text, "FULL-ARM") == 0) {
         Log.info("Full arming");
-        char *armMessage = "\\A\x1/";
+        const char *armMessage = "\\A\x1/";
         sendSimpleMessage(armMessage, 4);
     } else if (strcmp(text, "PART-ARM") == 0) {
         Log.info("Part arming");
-        char *armMessage = "\\Y\x1/";
+        const char *armMessage = "\\Y\x1/";
         sendSimpleMessage(armMessage, 4);
     } else if (text[0] == 'T') {
         if (strlen(text) == 2 && text[1] == '?') {
@@ -55,7 +55,7 @@ void Texecom::sendTest(const char *text) {
             sendSimpleMessage(setTimeMsg, 8);
         }
     } else if (strcmp(text, "ZONE") == 0) {
-        char *zoneMessage = "\\Z\xb\x5/"; //  \ Z 11 5 /
+        const char *zoneMessage = "\\Z\xb\x5/"; //  \ Z 11 5 /
         sendSimpleMessage(zoneMessage, 5);
     }
 }
@@ -81,11 +81,8 @@ bool Texecom::checkSimpleChecksum(const char *text, uint8_t length) {
     unsigned int a = 0;
     for (unsigned int i = 0; i < length; i++) {
         a += text[i];
-        // texSerial.write(text[i]);
-        // Log.info("Message: %d", text[i]);
     }
     char checksum = (a ^ 255) % 0x100;
-    // texSerial.write(checksum);
     return checksum == text[length];
 }
 
@@ -183,10 +180,14 @@ void Texecom::processTask(TASK_STEP_RESULT result) {
     if (result == CRESTRON_TASK_TIMEOUT)
         Log.info("processTask: Task timed out");
 
-    if (crestronTask == CRESTRON_ARM) {
-        armSystem(result);
-    } else if (crestronTask == CRESTRON_DISARM) {
-        disarmSystem(result);
+    if (activeProtocol == CRESTRON) {
+        if (crestronTask == CRESTRON_ARM) {
+            armSystem(result);
+        } else if (crestronTask == CRESTRON_DISARM) {
+            disarmSystem(result);
+        }
+    } else if (activeProtocol == SIMPLE) {
+
     }
 }
 
@@ -393,7 +394,6 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 crestronTask = CRESTRON_IDLE;
                 memset(userPin, 0, sizeof userPin);
                 armStartTime = 0;
-                delayCommand(COMMAND_SCREEN_STATE, 2500);
             } else {
                 Log.info("ARMING: Unexpected result at ARM_REQUESTED. Aborting");
                 abortTask();
@@ -552,13 +552,13 @@ bool Texecom::processCrestronMessage(char *message, uint8_t messageLength) {
         return true;
     // Fails to arm. e.g.
     // Zone 012 Active Garage Door
-    } else if (messageLength >= 17 &&
+    } /*else if (messageLength >= 17 &&
                 strncmp(message, "Zone", 4) == 0 &&
                 (strstr(message, "Active") - message) == 9) {
         Log.info("Failed to arm. Zone active while Arming");
         requestArmState();
         return true;
-    }
+    }*/
     return false;
 }
 
@@ -646,8 +646,8 @@ void Texecom::checkDigiOutputs() {
             callback(SEND_MESSAGE, 0, 0, "Alarm is reporting a fault");
             Log.error("Alarm is reporting a fault");
         } else {
-            callback(SEND_MESSAGE, 0, 0, "Alarm fault is resolved");
-            Log.info("Alarm fault is resolved");
+            callback(SEND_MESSAGE, 0, 0, "Alarm fault resolved");
+            Log.info("Alarm fault resolved");
         }
     }
 
@@ -717,25 +717,24 @@ void Texecom::loop() {
                     Log.info("Checksum valid");
                     buffer[bufferPosition-2] = '\0'; // Overwrite the checksum
                     memcpy(message, buffer, bufferPosition-1);
-                    // message[bufferPosition-2] = '\0'; // Replace 13 with termination
                     messageReady = true;
                     messageLength = bufferPosition-2;
-                    bufferPosition = 0;
-                    screenRequestRetryCount = 0;
-                    break;
                 } else {
                     buffer[bufferPosition++] = incomingByte;
                 }
             } else {
                 buffer[bufferPosition-1] = '\0'; // Replace 13 with termination
                 memcpy(message, buffer, bufferPosition);
-                // message[bufferPosition-1] = '\0'; // Replace 13 with termination
                 messageReady = true;
                 messageLength = bufferPosition-1;
+            }
+
+            if (messageReady) {
                 bufferPosition = 0;
                 screenRequestRetryCount = 0;
                 break;
             }
+
         } else {
             buffer[bufferPosition++] = incomingByte;
         }
@@ -794,7 +793,6 @@ void Texecom::loop() {
             }
         }
     }
-
 
     // HANDLE CRESTON LOGIN VIA KEYPRESS ON VIRTUAL SCREEN
     if (taskStep == CRESTRON_LOGIN && millis() > nextPinEntryTime) {
