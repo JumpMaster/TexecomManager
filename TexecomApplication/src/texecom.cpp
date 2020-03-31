@@ -59,8 +59,8 @@ void Texecom::sendTest(const char *text) {
         sendSimpleMessage(zoneMessage, 5);
     } else if (strcmp(text, "CHECK") == 0) {
         simpleTask = SIMPLE_CHECK_TIME;
-        taskStep = SIMPLE_START;
-        checkTime(RESULT_NONE);
+        taskStep = SIMPLE_LOGIN_REQUIRED;
+        simpleLogin(RESULT_NONE);
     }
 }
 
@@ -184,7 +184,10 @@ void Texecom::processTask(TASK_STEP_RESULT result) {
     if (result == CRESTRON_TASK_TIMEOUT)
         Log.info("processTask: Task timed out");
 
-    if (activeProtocol == SIMPLE || taskStep == SIMPLE_LOGIN) {
+    // Add seperate functions for handling logon and logoff
+    if (taskStep == SIMPLE_LOGIN) {
+        simpleLogin(result);
+    } else if (activeProtocol == SIMPLE) {
         if (simpleTask == SIMPLE_CHECK_TIME) {
             checkTime(result);
         }
@@ -410,31 +413,48 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
         abortTask();
 }
 
-void Texecom::checkTime(TASK_STEP_RESULT result) {
+void Texecom::simpleLogin(TASK_STEP_RESULT result) {
     switch (taskStep) {
-        case SIMPLE_START :  // Initiate request
-            Log.info("Starting time check");
+        case SIMPLE_LOGIN_REQUIRED :  // Initiate request
             if (activeProtocol != SIMPLE) {
-                Log.info("Simple login required");
+                Log.info("Starting login process");
                 taskStep = SIMPLE_LOGIN;
             }
             break;
         case SIMPLE_LOGIN :
             if (result == SIMPLE_OK) {
-                Log.info("Simple login confirmed, requesting time");
+                Log.info("Simple login confirmed");
                 activeProtocol = SIMPLE;
                 simpleProtocolTimeout = millis() + 30000;
-                sendSimpleMessage("\\T?/", 4);
-                taskStep = SIMPLE_REQUEST_TIME;
+                taskStep = SIMPLE_START;
+                switch (simpleTask) {
+                    case SIMPLE_CHECK_TIME :
+                        checkTime(SIMPLE_LOGIN_CONFIRMED);
+                        break;
+                }
             } else {
                 Log.info("Uh oh 1 - %d", result);
             }
+            break;
+    }
+}
+
+void Texecom::checkTime(TASK_STEP_RESULT result) {
+    switch (taskStep) {
+        case SIMPLE_START :
+            // if (result == SIMPLE_OK) {
+                Log.info("Requesting time");
+                sendSimpleMessage("\\T?/", 4);
+                taskStep = SIMPLE_REQUEST_TIME;
+            // } else {
+                // Log.info("Uh oh 1 - %d", result);
+            // }
             break;
         case SIMPLE_REQUEST_TIME :
             if (result == SIMPLE_TIME_CHECK_OK) {
                 Log.info("Time ok, logging out");
             } else if (result == SIMPLE_TIME_CHECK_OUT) {
-                Log.info("Time out, logging out");
+                Log.info("Time is out, logging out");
             } else {
                 Log.info("Uh oh 2 - %d", result);
             }

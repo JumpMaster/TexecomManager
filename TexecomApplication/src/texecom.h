@@ -53,10 +53,11 @@ class Texecom {
         CRESTRON_WAIT_FOR_NIGHT_ARM_PROMPT,
         CRESTRON_ARM_REQUESTED,
         CRESTRON_DISARM_REQUESTED,
-        SIMPLE_START,
-        SIMPLE_REQUEST_TIME,
+        SIMPLE_LOGIN_REQUIRED,
         SIMPLE_LOGIN,
+        SIMPLE_START,
         SIMPLE_LOGOUT,
+        SIMPLE_REQUEST_TIME,
     } TASK_STEP;
 
     typedef enum {
@@ -79,6 +80,7 @@ class Texecom {
         UNKNOWN_MESSAGE,
         SIMPLE_OK,
         SIMPLE_ERROR,
+        SIMPLE_LOGIN_CONFIRMED,
         SIMPLE_LOGIN_TIMEOUT,
         SIMPLE_TIME_CHECK_OK,
         SIMPLE_TIME_CHECK_OUT
@@ -124,6 +126,7 @@ class Texecom {
     void processTask(TASK_STEP_RESULT result);
     void armSystem(TASK_STEP_RESULT result);
     void disarmSystem(TASK_STEP_RESULT result);
+    void simpleLogin(TASK_STEP_RESULT result);
     void checkTime(TASK_STEP_RESULT result);
     void abortTask();
     void request(CRESTRON_COMMAND command);
