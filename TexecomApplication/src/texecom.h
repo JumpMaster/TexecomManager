@@ -4,6 +4,8 @@
 #define __TEXECOM_H_
 
 #include "Particle.h"
+#include "crestonhelper.h"
+#include "simplehelper.h"
 
 #define texSerial Serial1
 
@@ -35,11 +37,6 @@ class Texecom {
     } CALLBACK_TYPE;
 
     typedef enum {
-        COMMAND_ARMED_STATE = 0,
-        COMMAND_SCREEN_STATE = 1
-    } CRESTRON_COMMAND;
-
-    typedef enum {
         // CRESTRON_IDLE,
         CRESTRON_START,
         CRESTRON_CONFIRM_ARMED,
@@ -58,6 +55,7 @@ class Texecom {
         SIMPLE_START,
         SIMPLE_LOGOUT,
         SIMPLE_REQUEST_TIME,
+        SIMPLE_READ_ZONE_STATE,
     } TASK_STEP;
 
     typedef enum {
@@ -95,7 +93,8 @@ class Texecom {
     typedef enum {
         SIMPLE_IDLE = 0,
         SIMPLE_CHECK_TIME = 1,
-        SIMPLE_SET_TIME = 2
+        SIMPLE_SET_TIME = 2,
+        SIMPLE_ZONE_CHECK = 3,
     } SIMPLE_TASK;
 
     typedef enum {
@@ -110,6 +109,8 @@ class Texecom {
 
  public:
     Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*));
+    SimpleHelper simpleHelper;
+    CrestronHelper crestronHelper;
     void setup();
     void loop();
     void disarm(const char *code);
@@ -121,24 +122,20 @@ class Texecom {
     void setUDLCode(const char *code);
 
  private:
-    void requestArmState();
-    void requestScreen();
     void processTask(TASK_STEP_RESULT result);
     void armSystem(TASK_STEP_RESULT result);
     void disarmSystem(TASK_STEP_RESULT result);
     void simpleLogin(TASK_STEP_RESULT result);
     void checkTime(TASK_STEP_RESULT result);
+    void zoneCheck(TASK_STEP_RESULT result);
     void abortTask();
-    void request(CRESTRON_COMMAND command);
     void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*);
-    void delayCommand(CRESTRON_COMMAND command, int delay);
+    void delayCommand(CrestronHelper::CRESTRON_COMMAND command, int delay);
     void updateAlarmState(ALARM_STATE alarmState);
     void updateZoneState(char *message);
     void checkDigiOutputs();
     bool processCrestronMessage(char *message, uint8_t messageLength);
     bool processSimpleMessage(char *message, uint8_t messageLength);
-    void sendSimpleMessage(const char *text, uint8_t length);
-    bool checkSimpleChecksum(const char *text, uint8_t length);
 
     const char *msgZoneUpdate = "\"Z0";
     const char *msgArmUpdate = "\"A0";
@@ -175,9 +172,8 @@ class Texecom {
     CRESTRON_TASK crestronTask = CRESTRON_IDLE;
     SIMPLE_TASK simpleTask = SIMPLE_IDLE;
     ARM_TYPE armType;
-    CRESTRON_COMMAND delayedCommand;
+    CrestronHelper::CRESTRON_COMMAND delayedCommand;
     uint32_t delayedCommandExecuteTime = 0;
-    const char *commandStrings[2] = {"ASTATUS", "LSTATUS"};
     const uint8_t maxMessageSize = 100;
     char message[101];
     char buffer[101];

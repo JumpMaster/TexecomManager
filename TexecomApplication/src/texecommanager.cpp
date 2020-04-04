@@ -100,6 +100,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
             else
                 updateAlarmState(texecom.getState());
         }
+    } else if (strcmp(topic, "utilities/isDST") == 0) {
+        if (strcmp(p, "true") == 0)
+        Time.beginDST();
+        else
+        Time.endDST();
+        
+        if (Time.isDST())
+        Log.info("DST is active");
+        else
+        Log.info("DST is inactive");
     }
 }
 
@@ -177,6 +187,7 @@ void connectToMQTT() {
         mqttClient.subscribe("home/security/alarm/set");
         mqttClient.subscribe("home/security/alarm/code");
         mqttClient.subscribe("home/security/alarm/state");
+        mqttClient.subscribe("utilities/#");
     } else {
         mqttConnectionAttempts++;
         Log.info("MQTT failed to connect");
