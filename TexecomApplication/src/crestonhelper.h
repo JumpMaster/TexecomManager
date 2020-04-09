@@ -12,7 +12,7 @@ class CrestronHelper {
     typedef enum {
         COMMAND_ARMED_STATE = 0,
         COMMAND_SCREEN_STATE = 1
-    } CRESTRON_COMMAND;   
+    } CRESTRON_COMMAND;
 
  public:
     CrestronHelper();

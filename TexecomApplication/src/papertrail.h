@@ -42,7 +42,7 @@ private:
     static IPAddress resolve(const char *host);
     static const uint16_t kLocalPort;
     uint32_t lastMessageSent;
-    const uint8_t maxTokens = 20;
+    const uint8_t maxTokens = 30;
     uint8_t messageTokens = maxTokens;
 
 protected:

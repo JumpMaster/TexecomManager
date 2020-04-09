@@ -9,6 +9,9 @@
 
 #define texSerial Serial1
 
+#define firstZone 9 // Zone 1 = 1
+#define zoneCount 11 // 1 == 1
+
 class Texecom {
  public:
 
@@ -55,6 +58,7 @@ class Texecom {
         SIMPLE_START,
         SIMPLE_LOGOUT,
         SIMPLE_REQUEST_TIME,
+        SIMPLE_SEND_TIME,
         SIMPLE_READ_ZONE_STATE,
     } TASK_STEP;
 
@@ -120,6 +124,8 @@ class Texecom {
     ALARM_STATE getState() { return alarmState; }
     void sendTest(const  char *text);
     void setUDLCode(const char *code);
+    void syncTime();
+    void syncZones();
 
  private:
     void processTask(TASK_STEP_RESULT result);

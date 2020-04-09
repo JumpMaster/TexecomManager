@@ -14,57 +14,16 @@ void Texecom::setUDLCode(const char *code) {
     Log.info("New UDL code = %s", savedData.udlCode);
 }
 
-void Texecom::sendTest(const char *text) {
-    if (strlen(text) == 0) {
-        if (activeProtocol != SIMPLE) {
-            Log.info("Simple login required");
-            taskStep = SIMPLE_LOGIN;
-            simpleTask = SIMPLE_CHECK_TIME;
-        } else if (activeProtocol == SIMPLE) {
-            Log.info("Simple login valid");
-        }
-    } else if (strcmp(text, "STATUS") == 0) {
-        Log.info("Requesting arm state");
-        crestronHelper.requestArmState();
-    } else if (strcmp(text, "LOGOUT") == 0) {
-        taskStep = SIMPLE_LOGOUT;
-        simpleHelper.sendSimpleMessage("\\H/", 3);
-    } else if (strcmp(text, "IDENTITY") == 0) {
-        simpleHelper.sendSimpleMessage("\\I/", 3);
-    } else if (strcmp(text, "FULL-ARM") == 0) {
-        Log.info("Full arming");
-        const char *armMessage = "\\A\x1/";
-        simpleHelper.sendSimpleMessage(armMessage, 4);
-    } else if (strcmp(text, "PART-ARM") == 0) {
-        Log.info("Part arming");
-        const char *armMessage = "\\Y\x1/";
-        simpleHelper.sendSimpleMessage(armMessage, 4);
-    } else if (text[0] == 'T') {
-        if (strlen(text) == 2 && text[1] == '?') {
-            simpleHelper.sendSimpleMessage("\\T?/", 4);
-        } else {
-            char setTimeMsg[8];
-            setTimeMsg[0] = '\\';
-            setTimeMsg[1] = 'T';
-            setTimeMsg[2] = Time.day();
-            setTimeMsg[3] = Time.month();
-            setTimeMsg[4] = Time.year()-2000;
-            setTimeMsg[5] = Time.hour();
-            setTimeMsg[6] = Time.minute();
-            setTimeMsg[7] = '/';
-            simpleHelper.sendSimpleMessage(setTimeMsg, 8);
-        }
-    } else if (strcmp(text, "ZONE") == 0) {
-        // const char *zoneMessage = "\\Z\x8\xb/"; //  \ Z 8 11 /
-        // simpleHelper.sendSimpleMessage(zoneMessage, 5);
-        simpleTask = SIMPLE_ZONE_CHECK;
-        taskStep = SIMPLE_LOGIN_REQUIRED;
-        simpleLogin(RESULT_NONE);
-    } else if (strcmp(text, "CHECK") == 0) {
-        simpleTask = SIMPLE_CHECK_TIME;
-        taskStep = SIMPLE_LOGIN_REQUIRED;
-        simpleLogin(RESULT_NONE);
-    }
+void Texecom::syncTime() {
+    simpleTask = SIMPLE_CHECK_TIME;
+    taskStep = SIMPLE_LOGIN_REQUIRED;
+    simpleLogin(RESULT_NONE);
+}
+
+void Texecom::syncZones() {
+    simpleTask = SIMPLE_ZONE_CHECK;
+    taskStep = SIMPLE_LOGIN_REQUIRED;
+    simpleLogin(RESULT_NONE);   
 }
 
 void Texecom::setDebug(bool enabled) {
@@ -416,25 +375,37 @@ void Texecom::simpleLogin(TASK_STEP_RESULT result) {
 void Texecom::checkTime(TASK_STEP_RESULT result) {
     switch (taskStep) {
         case SIMPLE_START :
-            // if (result == SIMPLE_OK) {
-                Log.info("Requesting time");
-                simpleHelper.sendSimpleMessage("\\T?/", 4);
-                taskStep = SIMPLE_REQUEST_TIME;
-            // } else {
-                // Log.info("Uh oh 1 - %d", result);
-            // }
+            Log.info("Requesting time");
+            simpleHelper.sendSimpleMessage("\\T?/", 4);
+            taskStep = SIMPLE_REQUEST_TIME;
             break;
         case SIMPLE_REQUEST_TIME :
             if (result == SIMPLE_TIME_CHECK_OK) {
                 Log.info("Time ok, logging out");
             } else if (result == SIMPLE_TIME_CHECK_OUT) {
-                Log.info("Time is out, logging out");
+                Log.info("Time is out, Setting time");
+                char setTimeMsg[8];
+                setTimeMsg[0] = '\\';
+                setTimeMsg[1] = 'T';
+                setTimeMsg[2] = Time.day();
+                setTimeMsg[3] = Time.month();
+                setTimeMsg[4] = Time.year()-2000;
+                setTimeMsg[5] = Time.hour();
+                setTimeMsg[6] = Time.minute();
+                setTimeMsg[7] = '/';
+                simpleHelper.sendSimpleMessage(setTimeMsg, 8);
+                taskStep = SIMPLE_SEND_TIME;
+                break;
             } else {
-                Log.info("Uh oh 2 - %d", result);
+                Log.info("Uh oh Time 1 - %d", result);
             }
             simpleHelper.sendSimpleMessage("\\H/", 3);
             taskStep = SIMPLE_LOGOUT;
-
+            break;
+        case SIMPLE_SEND_TIME :
+            Log.info("Time set, logging out");
+            simpleHelper.sendSimpleMessage("\\H/", 3);
+            taskStep = SIMPLE_LOGOUT;
             break;
         case SIMPLE_LOGOUT :
             if (result == SIMPLE_OK) {
@@ -442,7 +413,7 @@ void Texecom::checkTime(TASK_STEP_RESULT result) {
                 activeProtocol = CRESTRON;
                 simpleTask = SIMPLE_IDLE;
             } else {
-                Log.info("Uh oh 3 - %d", result);
+                Log.info("Uh oh Time 2 - %d", result);
             }
             break;
     }
@@ -453,7 +424,13 @@ void Texecom::zoneCheck(TASK_STEP_RESULT result) {
         case SIMPLE_START :
             Log.info("Requesting Zone state");
             taskStep = SIMPLE_READ_ZONE_STATE;
-            simpleHelper.sendSimpleMessage("\\Z\x8\xb/", 5); //  \ Z 8 11 /
+            char zoneRequestMessage[5];
+            zoneRequestMessage[0] = '\\';
+            zoneRequestMessage[1] = 'Z';
+            zoneRequestMessage[2] = firstZone-1;
+            zoneRequestMessage[3] = zoneCount;
+            zoneRequestMessage[4] = '/';
+            simpleHelper.sendSimpleMessage(zoneRequestMessage, 5); //  \ Z 8 11 /
             break;
         case SIMPLE_READ_ZONE_STATE :
             Log.info("zoneCheck Logging Out");
@@ -473,7 +450,6 @@ void Texecom::zoneCheck(TASK_STEP_RESULT result) {
 }
 
 void Texecom::abortTask() {
-    // taskStep = CRESTRON_IDLE;
     crestronTask = CRESTRON_IDLE;
     texSerial.println("KEYR");
     delayedCommandExecuteTime = 0;
@@ -483,7 +459,6 @@ void Texecom::abortTask() {
     disarmStartTime = 0;
     crestronHelper.requestArmState();
 
-    // lastCommandTime = 0;
     commandAttempts = 0;
 }
 
@@ -641,8 +616,15 @@ bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
             processTask(SIMPLE_TIME_CHECK_OUT);
         return true;
     } else if (taskStep == SIMPLE_READ_ZONE_STATE) {
-        simpleHelper.processReceivedZoneData(message, messageLength);
+        SimpleHelper::ZONE_STATE zones[zoneCount];
+        simpleHelper.processReceivedZoneData(message, messageLength, zones);
+
+        for (uint8_t i = 0; i < zoneCount; i++) {
+            Log.info("Zone %02d - AC:%d TM:%d AL:%d FA:%d", i+firstZone, zones[i].isActive, zones[i].isTamper, zones[i].isAlarmed, zones[i].hasFault);
+        }
+
         processTask(SIMPLE_OK);
+        return true;
     }
     Log.info ("Unknown simple message rejected");
     processTask(UNKNOWN_MESSAGE);

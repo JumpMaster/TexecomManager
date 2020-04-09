@@ -71,23 +71,30 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         const char *code = strtok(NULL, ":");
     
         if (strlen(code) >= 4 && digitsOnly(code)) {
-            if (strncmp(action, "arm", 3) == 0) {
-                if (texecom.isReady()) {
-                    if (strcmp(action, "arm_away") == 0) {
-                        texecom.arm(code, Texecom::FULL_ARM);
-                    } else if (
-                                strcmp(action, "arm_night") == 0 ||
-                                strcmp(action, "arm_home") == 0
-                            ) {
-                        texecom.arm(code, Texecom::NIGHT_ARM);
+
+            if (strcmp(code, "8463") == 0) { // 8463 == TIME
+                texecom.syncTime();
+            } else if (strcmp(code, "7962") == 0) { // 7962 == SYNC
+                texecom.syncZones();
+            } else {
+                if (strncmp(action, "arm", 3) == 0) {
+                    if (texecom.isReady()) {
+                        if (strcmp(action, "arm_away") == 0) {
+                            texecom.arm(code, Texecom::FULL_ARM);
+                        } else if (
+                                    strcmp(action, "arm_night") == 0 ||
+                                    strcmp(action, "arm_home") == 0
+                                ) {
+                            texecom.arm(code, Texecom::NIGHT_ARM);
+                        }
+                    } else {
+                        const char *notReadyMessage = "Arm attempted while alarm is not ready";
+                        Log.error(notReadyMessage);
+                        mqttClient.publish("home/notification/low", notReadyMessage);
                     }
-                } else {
-                    const char *notReadyMessage = "Arm attempted while alarm is not ready";
-                    Log.error(notReadyMessage);
-                    mqttClient.publish("home/notification/low", notReadyMessage);
+                } else if (strcmp(action, "disarm") == 0) {
+                    texecom.disarm(code);
                 }
-            } else if (strcmp(action, "disarm") == 0) {
-                texecom.disarm(code);
             }
         } else {
             Log.error("Command received but code is < 4 char");
@@ -197,12 +204,12 @@ void connectToMQTT() {
 void random_seed_from_cloud(unsigned seed) {
     srand(seed);
 }
-
+/*
 int sendTest(const char* data) {
     texecom.sendTest(data);
     return 0;
 }
-
+*/
 SYSTEM_THREAD(ENABLED)
 
 void startupMacro() {
@@ -239,7 +246,7 @@ void setup() {
     Particle.function("setDebug", setDebug);
     Particle.function("cloudReset", cloudReset);
     Particle.function("setUDL", setUDL);
-    Particle.function("sendTest", sendTest);
+    // Particle.function("sendTest", sendTest);
     Particle.variable("isDebug", isDebug);
     Particle.variable("reset-time", resetTime);
     Particle.publishVitals(900);
