@@ -21,26 +21,32 @@ class Texecom {
     };
 
     typedef enum {
+        ZONE_ACTIVE = 1 << 0,
+        ZONE_TAMPER = 1 << 1,
+        ZONE_FAULT = 1 << 2,
+        ZONE_FAILED_TEST = 1 << 3,
+        ZONE_ALARMED = 1 << 4,
+        ZONE_MANUAL_BYPASS = 1 << 5,
+        ZONE_AUTO_BYPASS = 1 << 6,
+        ZONE_ALWAYS_ZERO = 1 << 7,
+    } ZONE_FLAGS;
+
+    typedef enum {
+        ALARM_READY = 1 << 0,
+        ALARM_FAULT = 1 << 1,
+        ALARM_ARM_FAILED = 1 << 2,
+    } ALARM_FLAGS;
+
+    typedef enum {
         DISARMED = 0,
         ARMED_HOME = 1,
         ARMED_AWAY = 2,
         PENDING = 3,
         ARMING = 4,
         TRIGGERED = 5,
-        ARMED = 6,
-        UNKNOWN = 7,
     } ALARM_STATE;
 
     typedef enum {
-        ALARM_STATE_CHANGE = 0,
-        ZONE_STATE_CHANGE = 1,
-        ALARM_TRIGGERED = 2,
-        ALARM_READY_CHANGE = 3,
-        SEND_MESSAGE = 4
-    } CALLBACK_TYPE;
-
-    typedef enum {
-        // CRESTRON_IDLE,
         CRESTRON_START,
         CRESTRON_CONFIRM_ARMED,
         CRESTRON_CONFIRM_DISARMED,
@@ -112,7 +118,7 @@ class Texecom {
     } PROTOCOL;
 
  public:
-    Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*));
+    Texecom(void (*alarmCallback)(Texecom::ALARM_STATE, uint8_t), void (*zoneCallback)(uint8_t, uint8_t));
     SimpleHelper simpleHelper;
     CrestronHelper crestronHelper;
     void setup();
@@ -122,6 +128,7 @@ class Texecom {
     void setDebug(bool enabled);
     bool isReady() { return statePinAreaReady == LOW; }
     ALARM_STATE getState() { return alarmState; }
+    void updateAlarmState();
     void sendTest(const  char *text);
     void setUDLCode(const char *code);
     void syncTime();
@@ -135,10 +142,11 @@ class Texecom {
     void checkTime(TASK_STEP_RESULT result);
     void zoneCheck(TASK_STEP_RESULT result);
     void abortTask();
-    void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*);
+    void (*zoneCallback)(uint8_t, uint8_t);
+    void (*alarmCallback)(Texecom::ALARM_STATE, uint8_t);
     void delayCommand(CrestronHelper::CRESTRON_COMMAND command, int delay);
-    void updateAlarmState(ALARM_STATE alarmState);
-    void updateZoneState(char *message);
+    void decodeZoneState(char *message);
+    void updateZoneState(uint8_t zone);
     void checkDigiOutputs();
     bool processCrestronMessage(char *message, uint8_t messageLength);
     bool processSimpleMessage(char *message, uint8_t messageLength);
@@ -203,7 +211,7 @@ class Texecom {
     uint8_t loginPinPosition;
     uint32_t nextPinEntryTime;
     const int PIN_ENTRY_DELAY = 500;
-    ALARM_STATE alarmState = UNKNOWN;
+    ALARM_STATE alarmState = DISARMED;
     uint32_t lastStateChange;
     const int armingTimeout = 45000;
 
@@ -213,7 +221,8 @@ class Texecom {
     uint32_t simpleProtocolTimeout;
     uint32_t simpleCommandLastSent;
 
-    uint8_t triggeredZone = 0;
+    uint8_t zoneStates[zoneCount];
+    uint8_t alarmStateFlags;
 
 //  Digi Output - Argon Pin - Texecom Configuration
 //  1 ----------------- D12 - 22 Full Armed
@@ -234,14 +243,14 @@ class Texecom {
     const int pinFaultPresent = D15;
     const int pinAreaReady = D19;
 
-    bool statePinFullArmed = HIGH;
-    bool statePinPartArmed = HIGH;
-    bool statePinEntry = HIGH;
-    bool statePinExiting = HIGH;
-    bool statePinTriggered = HIGH;
+    bool statePinFullArmed = LOW;
+    bool statePinPartArmed = LOW;
+    bool statePinEntry = LOW;
+    bool statePinExiting = LOW;
+    bool statePinTriggered = LOW;
     bool statePinArmFailed = HIGH;
     bool statePinFaultPresent = HIGH;
-    bool statePinAreaReady = LOW;
+    bool statePinAreaReady = HIGH;
 };
 
 #endif  // __TEXECOM_H_

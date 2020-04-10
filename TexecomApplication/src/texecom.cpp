@@ -2,8 +2,9 @@
 
 #include "texecom.h"
 
-Texecom::Texecom(void (*callback)(CALLBACK_TYPE, uint8_t, uint8_t, const char*)) {
-    this->callback = callback;
+Texecom::Texecom(void (*alarmCallback)(Texecom::ALARM_STATE, uint8_t), void (*zoneCallback)(uint8_t, uint8_t)) {
+    this->zoneCallback = zoneCallback;
+    this->alarmCallback = alarmCallback;
 }
 
 void Texecom::setUDLCode(const char *code) {
@@ -65,47 +66,38 @@ void Texecom::delayCommand(CrestronHelper::CRESTRON_COMMAND command, int delay) 
     delayedCommandExecuteTime = millis() + delay;
 }
 
-void Texecom::updateAlarmState(ALARM_STATE state) {
-    if (alarmState == state)
-        return;
-
-    if (state == ARMED && (alarmState == ARMED_HOME || alarmState == ARMED_AWAY))
-        return;
-
-    if (state == ARMED)
-        delayCommand(CrestronHelper::COMMAND_SCREEN_STATE, 1000);
-
-    if (state == DISARMED)
-        triggeredZone = 0;
-
-    if (state == TRIGGERED && triggeredZone != 0)
-            callback(ALARM_TRIGGERED, triggeredZone, 0, NULL);
-
+void Texecom::updateAlarmState() {
     lastStateChange = millis();
-    alarmState = state;
-    callback(ALARM_STATE_CHANGE, 0, alarmState, NULL);
+    alarmCallback(alarmState, alarmStateFlags);
 }
 
-void Texecom::updateZoneState(char *message) {
+void Texecom::decodeZoneState(char *message) {
     uint8_t zone;
     uint8_t state;
 
     char zoneChar[4];
     memcpy(zoneChar, &message[2], 3);
     zoneChar[3] = '\0';
-    zone = atoi(zoneChar);
-
-    if ((alarmState == PENDING || alarmState == TRIGGERED) &&
-        triggeredZone == 0) {
-        triggeredZone = zone;
-
-        if (alarmState == TRIGGERED)
-            callback(ALARM_TRIGGERED, 0, triggeredZone, NULL);
-    }
+    zone = atoi(zoneChar) - firstZone;
 
     state = message[5] - '0';
 
-    callback(ZONE_STATE_CHANGE, zone, state, NULL);
+    if (state == 0) { // Healthy
+        zoneStates[zone] &= ~ZONE_ACTIVE;
+        zoneStates[zone] &= ~ZONE_TAMPER;
+    } else if (state == 1) { // Active
+        zoneStates[zone] |= ZONE_ACTIVE;
+        zoneStates[zone] &= ~ZONE_TAMPER;
+    } else if (state == 2) { // Tamper
+        zoneStates[zone] &= ~ZONE_ACTIVE;
+        zoneStates[zone] |= ZONE_TAMPER;
+    }
+
+    updateZoneState(zone);
+}
+
+void Texecom::updateZoneState(uint8_t zone) {
+    zoneCallback(zone+firstZone, zoneStates[zone]);
 }
 
 void Texecom::processTask(TASK_STEP_RESULT result) {
@@ -467,7 +459,7 @@ bool Texecom::processCrestronMessage(char *message, uint8_t messageLength) {
     // Zone state changed
     if (messageLength == 6 &&
         strncmp(message, msgZoneUpdate, strlen(msgZoneUpdate)) == 0) {
-        updateZoneState(message);
+        decodeZoneState(message);
         return true;
     // System Armed
     } else if (messageLength >= 6 &&
@@ -616,12 +608,10 @@ bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
             processTask(SIMPLE_TIME_CHECK_OUT);
         return true;
     } else if (taskStep == SIMPLE_READ_ZONE_STATE) {
-        SimpleHelper::ZONE_STATE zones[zoneCount];
-        simpleHelper.processReceivedZoneData(message, messageLength, zones);
+        simpleHelper.processReceivedZoneData(message, messageLength, zoneStates);
 
-        for (uint8_t i = 0; i < zoneCount; i++) {
-            Log.info("Zone %02d - AC:%d TM:%d AL:%d FA:%d", i+firstZone, zones[i].isActive, zones[i].isTamper, zones[i].isAlarmed, zones[i].hasFault);
-        }
+        for (uint8_t i = 0; i < zoneCount; i++)
+            zoneCallback(i+firstZone, zoneStates[i]);
 
         processTask(SIMPLE_OK);
         return true;
@@ -632,80 +622,101 @@ bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
 }
 
 void Texecom::checkDigiOutputs() {
+    bool changeDetected = false;
 
     bool _state = digitalRead(pinFullArmed);
 
     if (_state != statePinFullArmed) {
+        changeDetected = true;
         statePinFullArmed = _state;
         if (_state == LOW)
-            updateAlarmState(ARMED_AWAY);
+            alarmState = ARMED_AWAY;
         else
-            updateAlarmState(DISARMED);
+            alarmState = DISARMED;
     }
 
     _state = digitalRead(pinPartArmed);
 
     if (_state != statePinPartArmed) {
+        changeDetected = true;
         statePinPartArmed = _state;
         if (_state == LOW)
-            updateAlarmState(ARMED_HOME);
+            alarmState = ARMED_HOME;
         else
-            updateAlarmState(DISARMED);
+            alarmState = DISARMED;
     }
 
     _state = digitalRead(pinEntry);
 
     if (_state != statePinEntry) {
+        changeDetected = true;
         statePinEntry = _state;
         if (_state == LOW)
-            updateAlarmState(PENDING);
+            alarmState = PENDING;
     }
 
     _state = digitalRead(pinExiting);
 
     if (_state != statePinExiting) {
+        changeDetected = true;
         statePinExiting = _state;
         if (_state == LOW)
-            updateAlarmState(PENDING);
+            alarmState = PENDING;
     }
 
     _state = digitalRead(pinTriggered);
 
     if (_state != statePinTriggered) {
+        changeDetected = true;
         statePinTriggered = _state;
         if (_state == LOW)
-            updateAlarmState(TRIGGERED);
+            alarmState = TRIGGERED;
     }
 
     _state = digitalRead(pinAreaReady);
 
     if (_state != statePinAreaReady) {
+        changeDetected = true;
         statePinAreaReady = _state;
-        callback(ALARM_READY_CHANGE, 0, statePinAreaReady == LOW ? 1 : 0, NULL);
+
+        if (statePinAreaReady == LOW)
+            alarmStateFlags |= ALARM_READY;
+        else
+            alarmStateFlags &= ~ALARM_READY;
     }
 
     _state = digitalRead(pinFaultPresent);
 
     if (_state != statePinFaultPresent) {
+        changeDetected = true;
         statePinFaultPresent = _state;
-        if (_state == LOW) {
-            callback(SEND_MESSAGE, 0, 0, "Alarm is reporting a fault");
+
+        if (statePinFaultPresent == LOW) {
+            alarmStateFlags |= ALARM_FAULT;
             Log.error("Alarm is reporting a fault");
         } else {
-            callback(SEND_MESSAGE, 0, 0, "Alarm fault resolved");
-            Log.info("Alarm fault resolved");
+            alarmStateFlags &= ~ALARM_FAULT;
+            Log.info("Alarm fault cleared");
         }
     }
 
     _state = digitalRead(pinArmFailed);
 
     if (_state != statePinArmFailed) {
+        changeDetected = true;
         statePinArmFailed = _state;
-        if (_state == LOW) {
-            callback(SEND_MESSAGE, 0, 0, "Alarm failed to arm");
+
+        if (statePinArmFailed == LOW) {
+            alarmStateFlags |= ALARM_ARM_FAILED;
             Log.error("Alarm failed to arm");
+        } else {
+            alarmStateFlags &= ~ALARM_ARM_FAILED;
+            Log.error("Alarm arm failure cleared");
         }
     }
+
+    if (changeDetected)
+        updateAlarmState();
 
 }
 
@@ -727,10 +738,6 @@ void Texecom::setup() {
         Log.info("UDL code = %s", savedData.udlCode);
     
     checkDigiOutputs();
-
-    if (alarmState == UNKNOWN) {
-        updateAlarmState(DISARMED);
-    }
 }
 
 void Texecom::loop() {
@@ -811,11 +818,9 @@ void Texecom::loop() {
                 Log.info(String::format("Unknown Crestron command - %s", message));
             } else {
                 Log.info("Unknown non-Crestron command - %s", message);
-                // if (message[0] < 64 || message[0] > 126) {
-                    for (uint8_t i = 0; i < messageLength; i++) { //strlen(message); i++) {
-                        Log.info("%d\n", message[i]);
-                    }
-                // }
+                for (uint8_t i = 0; i < messageLength; i++) {
+                    Log.info("%d\n", message[i]);
+                }
             }
 
             if (crestronTask != CRESTRON_IDLE && !messageComplete) {

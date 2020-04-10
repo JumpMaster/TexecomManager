@@ -9,8 +9,9 @@
 // Stubs
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void sendTriggeredMessage(uint8_t triggeredZone);
-void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state, const char *message);
-void updateAlarmState(Texecom::ALARM_STATE newState);
+void alarmCallback(Texecom::ALARM_STATE state, uint8_t flags);
+void zoneCallback(uint8_t zone, uint8_t state);
+void publishAlarmState(Texecom::ALARM_STATE newState);
 void updateZoneState(uint8_t zone, uint8_t state);
 
 ApplicationWatchdog wd(60000, System.reset);
@@ -21,7 +22,7 @@ const int mqttConnectAtemptTimeout1 = 5000;
 const int mqttConnectAtemptTimeout2 = 30000;
 unsigned int mqttConnectionAttempts;
 bool mqttStateConfirmed = true;
-Texecom texecom(alarmCallback);
+Texecom texecom(alarmCallback, zoneCallback);
 uint32_t resetTime = 0;
 bool isDebug = false;
 retained uint32_t lastHardResetTime;
@@ -35,21 +36,41 @@ PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort,
   // TOO MUCH!!! { “comm”, LOG_LEVEL_ALL }
 });
 
-void alarmCallback(Texecom::CALLBACK_TYPE callbackType, uint8_t zone, uint8_t state, const char *message) {
-    if (callbackType == Texecom::ZONE_STATE_CHANGE) {
-        updateZoneState(zone, state);
-    } else if (callbackType == Texecom::ALARM_STATE_CHANGE) {
-        updateAlarmState((Texecom::ALARM_STATE) state);
-    } else if (callbackType == Texecom::ALARM_TRIGGERED) {
-        sendTriggeredMessage(zone);
-    } else if (callbackType == Texecom::SEND_MESSAGE) {
-        if (mqttClient.isConnected()) {
-            mqttClient.publish("home/notification/low", message);
-        }
-    } else if (callbackType == Texecom::ALARM_READY_CHANGE) {
-        char readyPayload[14];
-        snprintf(readyPayload, sizeof(readyPayload), "{\"ready\":\"%d\"}", state);
-        mqttClient.publish("home/security/alarm/attributes", readyPayload, MQTT::QOS2, true);
+
+void alarmCallback(Texecom::ALARM_STATE state, uint8_t flags) {
+
+    Log.info("Alarm: %s", alarmStateStrings[state]);
+
+    char message[58];
+
+    snprintf(message,
+                sizeof(message),
+                "{\"state\":\"%s\",\"ready\":%d,\"fault\":%d,\"arm_failed\":%d}",
+                alarmStateStrings[state],
+                flags & Texecom::ALARM_READY,
+                flags & Texecom::ALARM_FAULT,
+                flags & Texecom::ALARM_ARM_FAILED);
+
+
+    mqttClient.publish("home/security/alarm", message, MQTT::QOS2, true);
+}
+
+void zoneCallback(uint8_t zone, uint8_t state) {
+
+    char attributesTopic[34];
+    snprintf(attributesTopic, sizeof(attributesTopic), "home/security/zone/%03d", zone);
+    char attributesMsg[46];
+    
+    snprintf(attributesMsg,
+            sizeof(attributesMsg),
+            "{\"active\":%d,\"tamper\":%d,\"fault\":%d,\"alarmed\":%d}",
+            state & Texecom::ZONE_ACTIVE,
+            state & Texecom::ZONE_TAMPER,
+            state & Texecom::ZONE_FAULT,
+            state & Texecom::ZONE_ALARMED);
+
+    if (mqttClient.isConnected()) {
+        mqttClient.publish(attributesTopic, attributesMsg, true);
     }
 }
 
@@ -101,62 +122,21 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         }
         
     } else if (strcmp(topic, "home/security/alarm/state") == 0) {
-        if (texecom.getState() != Texecom::UNKNOWN) {
-            if (strcmp(alarmStateStrings[texecom.getState()], p) == 0)
-                mqttStateConfirmed = true;
-            else
-                updateAlarmState(texecom.getState());
-        }
+        if (strcmp(alarmStateStrings[texecom.getState()], p) == 0)
+            mqttStateConfirmed = true;
+        else
+            texecom.updateAlarmState();
     } else if (strcmp(topic, "utilities/isDST") == 0) {
         if (strcmp(p, "true") == 0)
-        Time.beginDST();
+            Time.beginDST();
         else
-        Time.endDST();
+            Time.endDST();
         
         if (Time.isDST())
-        Log.info("DST is active");
+            Log.info("DST is active");
         else
-        Log.info("DST is inactive");
+            Log.info("DST is inactive");
     }
-}
-
-void sendTriggeredMessage(uint8_t triggeredZone) {
-    char charData[100];
-    snprintf(charData, sizeof(charData), "Triggered by zone %d", triggeredZone);
-    Log.info(charData);
-
-    if (triggeredZone >= 10 && mqttClient.isConnected()) {
-        snprintf(charData, sizeof(charData), "Triggered by zone %s", alarmZoneStrings[triggeredZone-10]);
-        mqttClient.publish("home/notification/high", charData);
-    }
-}
-
-void updateAlarmState(Texecom::ALARM_STATE newState) {
-    const char *charSource = "{\"alarm-state\":\"%s\"}";
-    char charData[29];
-    snprintf(charData, sizeof(charData), charSource, alarmStateStrings[newState]);
-    Log.info(charData);
-
-    if (newState == Texecom::DISARMED)
-        mqttClient.publish("home/security/alarm/trigger", "", true);
-
-    if (newState != Texecom::ARMED) {  // Update Home-Assistant
-        mqttStateConfirmed = false;
-        if (mqttClient.isConnected())
-            mqttClient.publish("home/security/alarm/state", alarmStateStrings[newState], MQTT::QOS2, true);
-    }
-}
-
-void updateZoneState(uint8_t zone, uint8_t state) {
-    char mqttData[29];
-    snprintf(mqttData, sizeof(mqttData), "home/security/zone/%03d/state", zone);
-
-    char zoneState[2];
-    zoneState[0] = '0' + state;
-    zoneState[1] = '\0';
-
-    if (mqttClient.isConnected())
-        mqttClient.publish(mqttData, zoneState, true);
 }
 
 int cloudReset(const char* data) {
@@ -204,12 +184,7 @@ void connectToMQTT() {
 void random_seed_from_cloud(unsigned seed) {
     srand(seed);
 }
-/*
-int sendTest(const char* data) {
-    texecom.sendTest(data);
-    return 0;
-}
-*/
+
 SYSTEM_THREAD(ENABLED)
 
 void startupMacro() {
@@ -246,7 +221,7 @@ void setup() {
     Particle.function("setDebug", setDebug);
     Particle.function("cloudReset", cloudReset);
     Particle.function("setUDL", setUDL);
-    // Particle.function("sendTest", sendTest);
+
     Particle.variable("isDebug", isDebug);
     Particle.variable("reset-time", resetTime);
     Particle.publishVitals(900);

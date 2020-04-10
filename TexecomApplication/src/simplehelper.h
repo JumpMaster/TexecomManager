@@ -21,7 +21,7 @@ class SimpleHelper {
     bool checkSimpleChecksum(const char *text, uint8_t length);
     void sendSimpleMessage(const char *text, uint8_t length);
     bool processReceivedTime(const char *message);
-    bool processReceivedZoneData(const char *message, uint8_t messageLength, ZONE_STATE *zoneState);
+    bool processReceivedZoneData(const char *message, uint8_t messageLength, uint8_t *zoneState);
  private:
 };
 

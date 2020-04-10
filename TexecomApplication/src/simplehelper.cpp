@@ -31,34 +31,25 @@ bool SimpleHelper::processReceivedTime(const char *message) {
     t.tm_hour = message[3];     // Hours
     t.tm_min = message[4];      // Minutes
     t.tm_sec = 0;               // Seconds
-    t.tm_isdst = Time.isDST();             // Is DST on? 1 = yes, 0 = no, -1 = unknown
+    t.tm_isdst = Time.isDST();  // Is DST on? 1 = yes, 0 = no, -1 = unknown
         
     uint32_t alarmTime = mktime(&t);
     uint32_t localTime = Time.local();
     Log.info("Time - Alarm:%ld Local:%ld", alarmTime, localTime);
     
     if (localTime+120 > alarmTime && localTime-120 < alarmTime) {
-        return true; //processTask(SIMPLE_TIME_CHECK_OK);
+        return true;
     } else {
-        return false; //processTask(SIMPLE_TIME_CHECK_OUT);
+        return false;
     }
 }
 
-bool SimpleHelper::processReceivedZoneData(const char *message, uint8_t messageLength, ZONE_STATE *zoneState) {
+bool SimpleHelper::processReceivedZoneData(const char *message, uint8_t messageLength, uint8_t *zoneState) {
 
     for (uint8_t i = 0; i < messageLength; i+=2) {
-        char lowByte = message[i];
-        // char highByte = message[i+1];
-
-        bool zoneActive = (lowByte & 0x1) != 0;
-        bool zoneTamper = (lowByte & 0x2) != 0;
-        bool zoneFault = (lowByte & 0x4) != 0;
-        bool zoneAlarmed = (lowByte & 0x16) != 0;
-
-        zoneState[i/2].isActive = zoneActive;
-        zoneState[i/2].isTamper = zoneTamper;
-        zoneState[i/2].isAlarmed = zoneAlarmed;
-        zoneState[i/2].hasFault = zoneFault;
+        uint8_t lowByte = message[i];
+        // uint8_t HighByte = message[i+1];
+        zoneState[i/2] = lowByte;
     }
     return true;
 }
