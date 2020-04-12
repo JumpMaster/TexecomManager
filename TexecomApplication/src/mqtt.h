@@ -42,12 +42,27 @@ sample code bearing this copyright.
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //---------------------------------------------------------------------------
+
+bug fixed and features pull requests
+ * add publish(char*, char*, bool retain) #77
+ * Updating readme.md #75
+ * Fix bugs #74
+ * Added setBroker method to update domain or ip and port. #52
+ * Added keep alive setting #49
+ * Added support for clean session flag #47
+ * Fixed a buffer overflow / bad allocation size #38
+ * Topics should not start with '/' #37
+ * Completed path for Build IDE compatibility #23
+ * QOS given as enum type - refer github issue 12 #15
+ * retained is now a system keyword, fixes compiler issue #9
+ * replace boolean with bool and include application.h #4
+ * Proper include path for MQTT.h #1
 */
 
 #ifndef __MQTT_H_
 #define __MQTT_H_
 
-#include "Particle.h"
+#include "application.h"
 #include "spark_wiring_string.h"
 #include "spark_wiring_tcpclient.h"
 #include "spark_wiring_usbserial.h"
@@ -164,8 +179,6 @@ public:
 
     bool publish(const char *topic, const char* payload);
     bool publish(const char *topic, const char* payload, bool retain);
-    bool publish(const char *topic, const char* payload, EMQTT_QOS qos, bool retain);
-    /*
     bool publish(const char *topic, const char* payload, EMQTT_QOS qos, uint16_t *messageid = NULL);
     bool publish(const char *topic, const char* payload, EMQTT_QOS qos, bool dup, uint16_t *messageid = NULL);
     bool publish(const char *topic, const uint8_t *payload, unsigned int plength);
@@ -173,7 +186,6 @@ public:
     bool publish(const char *topic, const uint8_t *payload, unsigned int plength, EMQTT_QOS qos, bool dup, uint16_t *messageid = NULL);
     bool publish(const char *topic, const uint8_t *payload, unsigned int plength, bool retain);
     bool publish(const char *topic, const uint8_t *payload, unsigned int plength, bool retain, EMQTT_QOS qos, uint16_t *messageid = NULL);
-    */
     bool publish(const char *topic, const uint8_t *payload, unsigned int plength, bool retain, EMQTT_QOS qos, bool dup, uint16_t *messageid);
     void addQosCallback(void (*qoscallback)(unsigned int));
 

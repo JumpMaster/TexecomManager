@@ -104,7 +104,6 @@ void Texecom::processTask(TASK_STEP_RESULT result) {
     if (result == CRESTRON_TASK_TIMEOUT)
         Log.info("processTask: Task timed out");
 
-    // Add seperate functions for handling logon and logoff
     if (taskStep == SIMPLE_LOGIN) {
         simpleLogin(result);
     } else if (activeProtocol == SIMPLE) {
@@ -138,9 +137,9 @@ void Texecom::disarmSystem(TASK_STEP_RESULT result) {
                 crestronHelper.requestScreen();
             } else if (result == CRESTRON_IS_DISARMED) {
                 Log.info("DISARMING: System already armed. Aborting");
-                abortTask();
+                abortCrestronTask();
             } else {
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -154,7 +153,7 @@ void Texecom::disarmSystem(TASK_STEP_RESULT result) {
                 taskStep = CRESTRON_LOGIN;
             } else {
                 Log.info("DISARMING: Screen is not idle. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -164,7 +163,7 @@ void Texecom::disarmSystem(TASK_STEP_RESULT result) {
                 taskStep = CRESTRON_LOGIN_WAIT;
             } else {
                 Log.info("DISARMING: Login failed. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -180,7 +179,7 @@ void Texecom::disarmSystem(TASK_STEP_RESULT result) {
                 }
             } else {
                 Log.info("DISARMING: Login failed to confirm. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -193,26 +192,25 @@ void Texecom::disarmSystem(TASK_STEP_RESULT result) {
                 taskStep = CRESTRON_DISARM_REQUESTED;
             } else {
                 Log.info("DISARMING: Unexpected result at WAIT_FOR_DISARM_PROMPT. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
         case CRESTRON_DISARM_REQUESTED :
             if (result == CRESTRON_IS_DISARMED) {
                 Log.info("DISARMING: DISARM CONFIRMED");
-                // taskStep = CRESTRON_IDLE;
                 crestronTask = CRESTRON_IDLE;
                 memset(userPin, 0, sizeof userPin);
                 disarmStartTime = 0;
             } else {
                 Log.info("DISARMING: Unexpected result at DISARM_REQUESTED. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
     }
 
     if (result == CRESTRON_TASK_TIMEOUT && crestronTask != CRESTRON_IDLE)
-        abortTask();
+        abortCrestronTask();
 }
 
 void Texecom::armSystem(TASK_STEP_RESULT result) {
@@ -238,9 +236,9 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 crestronHelper.requestScreen();
             } else if (result == CRESTRON_IS_ARMED) {
                 Log.info("ARMING: System already armed. Aborting");
-                abortTask();
+                abortCrestronTask();
             } else {
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -250,7 +248,7 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 taskStep = CRESTRON_LOGIN;
             } else {
                 Log.info("ARMING: Screen is not idle. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -260,7 +258,7 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 taskStep = CRESTRON_LOGIN_WAIT;
             } else {
                 Log.info("ARMING: Login failed. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -271,7 +269,7 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 delayCommand(CrestronHelper::COMMAND_SCREEN_STATE, 500);
             } else {
                 Log.info("ARMING: Login failed to confirm. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -290,7 +288,7 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 }
             } else {
                 Log.info("ARMING: Unexpected result at WAIT_FOR_ARM_PROMPT. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -302,7 +300,7 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 delayCommand(CrestronHelper::COMMAND_SCREEN_STATE, 500);
             } else {
                 Log.info("ARMING: Unexpected result at WAIT_FOR_PART_ARM_PROMPT. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -314,7 +312,7 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 taskStep = CRESTRON_ARM_REQUESTED;
             } else {
                 Log.info("ARMING: Unexpected result at WAIT_FOR_NIGHT_ARM_PROMPT. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
 
@@ -326,13 +324,13 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 armStartTime = 0;
             } else {
                 Log.info("ARMING: Unexpected result at ARM_REQUESTED. Aborting");
-                abortTask();
+                abortCrestronTask();
             }
             break;
     }
 
     if (result == CRESTRON_TASK_TIMEOUT && crestronTask != CRESTRON_IDLE)
-        abortTask();
+        abortCrestronTask();
 }
 
 void Texecom::simpleLogin(TASK_STEP_RESULT result) {
@@ -374,6 +372,8 @@ void Texecom::checkTime(TASK_STEP_RESULT result) {
         case SIMPLE_REQUEST_TIME :
             if (result == SIMPLE_TIME_CHECK_OK) {
                 Log.info("Time ok, logging out");
+                simpleHelper.sendSimpleMessage("\\H/", 3);
+                taskStep = SIMPLE_LOGOUT;
             } else if (result == SIMPLE_TIME_CHECK_OUT) {
                 Log.info("Time is out, Setting time");
                 char setTimeMsg[8];
@@ -391,8 +391,6 @@ void Texecom::checkTime(TASK_STEP_RESULT result) {
             } else {
                 Log.info("Uh oh Time 1 - %d", result);
             }
-            simpleHelper.sendSimpleMessage("\\H/", 3);
-            taskStep = SIMPLE_LOGOUT;
             break;
         case SIMPLE_SEND_TIME :
             Log.info("Time set, logging out");
@@ -441,7 +439,7 @@ void Texecom::zoneCheck(TASK_STEP_RESULT result) {
     }
 }
 
-void Texecom::abortTask() {
+void Texecom::abortCrestronTask() {
     crestronTask = CRESTRON_IDLE;
     texSerial.println("KEYR");
     delayedCommandExecuteTime = 0;
@@ -464,13 +462,16 @@ bool Texecom::processCrestronMessage(char *message, uint8_t messageLength) {
     // System Armed
     } else if (messageLength >= 6 &&
                 strncmp(message, msgArmUpdate, strlen(msgArmUpdate)) == 0) {
+        // if (crestronTask != CRESTRON_IDLE) {
+            // processTask(CRESTRON_IS_ARMED);
+        // }
         return true;
     // System Disarmed
     } else if (messageLength >= 6 &&
                 strncmp(message, msgDisarmUpdate, strlen(msgDisarmUpdate)) == 0) {
-        if (crestronTask != CRESTRON_IDLE) {
-            processTask(CRESTRON_IS_DISARMED);
-        }
+        // if (crestronTask != CRESTRON_IDLE) {
+            // processTask(CRESTRON_IS_DISARMED);
+        // }
         return true;
     // Entry while armed
     } else if (messageLength == 6 &&
@@ -479,9 +480,6 @@ bool Texecom::processCrestronMessage(char *message, uint8_t messageLength) {
     // System arming
     } else if (messageLength == 6 &&
                 strncmp(message, msgArmingUpdate, strlen(msgArmingUpdate)) == 0) {
-        if (crestronTask != CRESTRON_IDLE) {
-            processTask(CRESTRON_IS_ARMING);
-        }
         return true;
     // Intruder
     } else if (messageLength == 6 &&
@@ -631,8 +629,12 @@ void Texecom::checkDigiOutputs() {
         statePinFullArmed = _state;
         if (_state == LOW)
             alarmState = ARMED_AWAY;
-        else
+        else {
             alarmState = DISARMED;
+            if (crestronTask != CRESTRON_IDLE) {
+                processTask(CRESTRON_IS_DISARMED);
+            }
+        }
     }
 
     _state = digitalRead(pinPartArmed);
@@ -642,8 +644,12 @@ void Texecom::checkDigiOutputs() {
         statePinPartArmed = _state;
         if (_state == LOW)
             alarmState = ARMED_HOME;
-        else
+        else {
             alarmState = DISARMED;
+            if (crestronTask != CRESTRON_IDLE) {
+                processTask(CRESTRON_IS_DISARMED);
+            }
+        }
     }
 
     _state = digitalRead(pinEntry);
@@ -660,8 +666,12 @@ void Texecom::checkDigiOutputs() {
     if (_state != statePinExiting) {
         changeDetected = true;
         statePinExiting = _state;
-        if (_state == LOW)
+        if (_state == LOW) {
             alarmState = PENDING;
+            if (crestronTask != CRESTRON_IDLE) {
+               processTask(CRESTRON_IS_ARMING);
+            }
+        }
     }
 
     _state = digitalRead(pinTriggered);

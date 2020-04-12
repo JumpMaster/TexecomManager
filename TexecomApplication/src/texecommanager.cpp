@@ -47,9 +47,9 @@ void alarmCallback(Texecom::ALARM_STATE state, uint8_t flags) {
                 sizeof(message),
                 "{\"state\":\"%s\",\"ready\":%d,\"fault\":%d,\"arm_failed\":%d}",
                 alarmStateStrings[state],
-                flags & Texecom::ALARM_READY,
-                flags & Texecom::ALARM_FAULT,
-                flags & Texecom::ALARM_ARM_FAILED);
+                (flags & Texecom::ALARM_READY) != 0,
+                (flags & Texecom::ALARM_FAULT) != 0,
+                (flags & Texecom::ALARM_ARM_FAILED) != 0);
 
 
     mqttClient.publish("home/security/alarm", message, MQTT::QOS2, true);
@@ -64,10 +64,10 @@ void zoneCallback(uint8_t zone, uint8_t state) {
     snprintf(attributesMsg,
             sizeof(attributesMsg),
             "{\"active\":%d,\"tamper\":%d,\"fault\":%d,\"alarmed\":%d}",
-            state & Texecom::ZONE_ACTIVE,
-            state & Texecom::ZONE_TAMPER,
-            state & Texecom::ZONE_FAULT,
-            state & Texecom::ZONE_ALARMED);
+            (state & Texecom::ZONE_ACTIVE) != 0,
+            (state & Texecom::ZONE_TAMPER) != 0,
+            (state & Texecom::ZONE_FAULT) != 0,
+            (state & Texecom::ZONE_ALARMED) != 0);
 
     if (mqttClient.isConnected()) {
         mqttClient.publish(attributesTopic, attributesMsg, true);

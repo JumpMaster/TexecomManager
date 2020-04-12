@@ -141,7 +141,7 @@ class Texecom {
     void simpleLogin(TASK_STEP_RESULT result);
     void checkTime(TASK_STEP_RESULT result);
     void zoneCheck(TASK_STEP_RESULT result);
-    void abortTask();
+    void abortCrestronTask();
     void (*zoneCallback)(uint8_t, uint8_t);
     void (*alarmCallback)(Texecom::ALARM_STATE, uint8_t);
     void delayCommand(CrestronHelper::CRESTRON_COMMAND command, int delay);

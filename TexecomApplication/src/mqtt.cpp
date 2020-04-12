@@ -337,17 +337,13 @@ bool MQTT::loop() {
 }
 
 bool MQTT::publish(const char* topic, const char* payload) {
-    return publish(topic, (uint8_t*)payload, strlen(payload), false, QOS0, false, NULL);
+    return publish(topic, (uint8_t*)payload, strlen(payload), false, QOS0, NULL);
 }
 
 bool MQTT::publish(const char* topic, const char* payload, bool retain) {
-    return publish(topic, (uint8_t*)payload, strlen(payload), retain, QOS0, false, NULL);
+    return publish(topic, (uint8_t*)payload, strlen(payload), retain, QOS0, NULL);
 }
 
-bool MQTT::publish(const char* topic, const char* payload, EMQTT_QOS qos, bool retain) {
-    return publish(topic, (uint8_t*)payload, strlen(payload), retain, qos, false, NULL);
-}
-/*
 bool MQTT::publish(const char * topic, const char* payload, EMQTT_QOS qos, bool dup, uint16_t *messageid) {
     return publish(topic, (uint8_t*)payload, strlen(payload), false, qos, dup, messageid);
 }
@@ -375,7 +371,7 @@ bool MQTT::publish(const char* topic, const uint8_t* payload, unsigned int pleng
 bool MQTT::publish(const char* topic, const uint8_t* payload, unsigned int plength, bool retain, EMQTT_QOS qos, uint16_t *messageid) {
     return publish(topic, payload, plength, retain, qos, false, messageid);
 }
-*/
+
 bool MQTT::publish(const char* topic, const uint8_t* payload, unsigned int plength, bool retain, EMQTT_QOS qos, bool dup, uint16_t *messageid) {
     if (isConnected()) {
         // Leave room in the buffer for header and variable length field
