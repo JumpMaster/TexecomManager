@@ -731,7 +731,7 @@ void Texecom::checkDigiOutputs() {
 }
 
 void Texecom::setup() {
-    texSerial.begin(19200, SERIAL_8N1);  // open serial communications
+    texSerial.begin(19200, SERIAL_8N2);  // open serial communications
     
     pinMode(pinFullArmed, INPUT);
     pinMode(pinPartArmed, INPUT);
@@ -758,7 +758,7 @@ void Texecom::loop() {
     // Read incoming serial data if available and copy to TCP port
     while (texSerial.available() > 0) {
         int incomingByte = texSerial.read();
-        // Log.info("%d", incomingByte);
+        // Log.info("S %d", incomingByte);
         if (bufferPosition == 0)
             messageStart = millis();
 
