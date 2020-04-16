@@ -22,6 +22,7 @@ class SimpleHelper {
     void sendSimpleMessage(const char *text, uint8_t length);
     bool processReceivedTime(const char *message);
     bool processReceivedZoneData(const char *message, uint8_t messageLength, uint8_t *zoneState);
+    void simpleLogout();
  private:
 };
 

@@ -48,10 +48,11 @@ bool SimpleHelper::processReceivedZoneData(const char *message, uint8_t messageL
 
     for (uint8_t i = 0; i < messageLength; i+=2) {
         uint8_t lowByte = message[i];
-        uint8_t HighByte = message[i+1];
+        // uint8_t HighByte = message[i+1];
 
         zoneState[i/2] = lowByte;
 
+        /*
         bool a1 = (lowByte & 0x1) != 0;
         bool a2 = (lowByte & 0x2) != 0;
         bool a3 = (lowByte & 0x4) != 0;
@@ -72,8 +73,13 @@ bool SimpleHelper::processReceivedZoneData(const char *message, uint8_t messageL
 
         Log.info("Zone %d L - %d %d %d %d %d %d %d %d", (i/2)+9, a1, a2, a3, a4, a5, a6, a7, a8);
         Log.info("Zone %d H - %d %d %d %d %d %d %d %d", (i/2)+9, b1, b2, b3, b4, b5, b6, b7, b8);
+        */
 
 
     }
     return true;
+}
+
+void SimpleHelper::simpleLogout() {
+    
 }

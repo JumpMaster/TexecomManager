@@ -5,13 +5,14 @@
 #include "papertrail.h"
 #include "Particle.h"
 #include "secrets.h"
+#include "TimeAlarms.h"
 
 // Stubs
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void sendTriggeredMessage(uint8_t triggeredZone);
-void alarmCallback(Texecom::ALARM_STATE state, uint8_t flags);
+void alarmCallback(TexecomClass::ALARM_STATE state, uint8_t flags);
 void zoneCallback(uint8_t zone, uint8_t state);
-void publishAlarmState(Texecom::ALARM_STATE newState);
+void publishAlarmState(TexecomClass::ALARM_STATE newState);
 void updateZoneState(uint8_t zone, uint8_t state);
 
 ApplicationWatchdog wd(60000, System.reset);
@@ -22,11 +23,11 @@ const int mqttConnectAtemptTimeout1 = 5000;
 const int mqttConnectAtemptTimeout2 = 30000;
 unsigned int mqttConnectionAttempts;
 bool mqttStateConfirmed = true;
-Texecom texecom(alarmCallback, zoneCallback);
 uint32_t resetTime = 0;
 bool isDebug = false;
 retained uint32_t lastHardResetTime;
 retained int resetCount;
+TexecomClass::ALARM_STATE alarmState;
 
 PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort,
   "ArgonTexecom", System.deviceID(),
@@ -36,10 +37,12 @@ PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort,
   // TOO MUCH!!! { “comm”, LOG_LEVEL_ALL }
 });
 
+void alarmCallback(TexecomClass::ALARM_STATE state, uint8_t flags) {
 
-void alarmCallback(Texecom::ALARM_STATE state, uint8_t flags) {
-
-    Log.info("Alarm: %s", alarmStateStrings[state]);
+    if (state != alarmState) {
+        alarmState = state;
+        Log.info("Alarm: %s", alarmStateStrings[state]);
+    }
 
     char message[58];
 
@@ -47,9 +50,9 @@ void alarmCallback(Texecom::ALARM_STATE state, uint8_t flags) {
                 sizeof(message),
                 "{\"state\":\"%s\",\"ready\":%d,\"fault\":%d,\"arm_failed\":%d}",
                 alarmStateStrings[state],
-                (flags & Texecom::ALARM_READY) != 0,
-                (flags & Texecom::ALARM_FAULT) != 0,
-                (flags & Texecom::ALARM_ARM_FAILED) != 0);
+                (flags & TexecomClass::ALARM_READY) != 0,
+                (flags & TexecomClass::ALARM_FAULT) != 0,
+                (flags & TexecomClass::ALARM_ARM_FAILED) != 0);
 
 
     mqttClient.publish("home/security/alarm", message, MQTT::QOS2, true);
@@ -64,10 +67,10 @@ void zoneCallback(uint8_t zone, uint8_t state) {
     snprintf(attributesMsg,
             sizeof(attributesMsg),
             "{\"active\":%d,\"tamper\":%d,\"fault\":%d,\"alarmed\":%d}",
-            (state & Texecom::ZONE_ACTIVE) != 0,
-            (state & Texecom::ZONE_TAMPER) != 0,
-            (state & Texecom::ZONE_FAULT) != 0,
-            (state & Texecom::ZONE_ALARMED) != 0);
+            (state & TexecomClass::ZONE_ACTIVE) != 0,
+            (state & TexecomClass::ZONE_TAMPER) != 0,
+            (state & TexecomClass::ZONE_FAULT) != 0,
+            (state & TexecomClass::ZONE_ALARMED) != 0);
 
     if (mqttClient.isConnected()) {
         mqttClient.publish(attributesTopic, attributesMsg, true);
@@ -94,19 +97,19 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         if (strlen(code) >= 4 && digitsOnly(code)) {
 
             if (strcmp(code, "8463") == 0) { // 8463 == TIME
-                texecom.syncTime();
+                Texecom.requestTimeSync();
             } else if (strcmp(code, "7962") == 0) { // 7962 == SYNC
-                texecom.syncZones();
+                Texecom.requestZoneSync();
             } else {
                 if (strncmp(action, "arm", 3) == 0) {
-                    if (texecom.isReady()) {
+                    if (Texecom.isReady()) {
                         if (strcmp(action, "arm_away") == 0) {
-                            texecom.arm(code, Texecom::FULL_ARM);
+                            Texecom.requestArm(code, TexecomClass::FULL_ARM);
                         } else if (
                                     strcmp(action, "arm_night") == 0 ||
                                     strcmp(action, "arm_home") == 0
                                 ) {
-                            texecom.arm(code, Texecom::NIGHT_ARM);
+                            Texecom.requestArm(code, TexecomClass::NIGHT_ARM);
                         }
                     } else {
                         const char *notReadyMessage = "Arm attempted while alarm is not ready";
@@ -114,7 +117,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                         mqttClient.publish("home/notification/low", notReadyMessage);
                     }
                 } else if (strcmp(action, "disarm") == 0) {
-                    texecom.disarm(code);
+                    Texecom.requestDisarm(code);
                 }
             }
         } else {
@@ -122,10 +125,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         }
         
     } else if (strcmp(topic, "home/security/alarm/state") == 0) {
-        if (strcmp(alarmStateStrings[texecom.getState()], p) == 0)
+        if (strcmp(alarmStateStrings[Texecom.getState()], p) == 0)
             mqttStateConfirmed = true;
         else
-            texecom.updateAlarmState();
+            Texecom.updateAlarmState();
     } else if (strcmp(topic, "utilities/isDST") == 0) {
         if (strcmp(p, "true") == 0)
             Time.beginDST();
@@ -155,13 +158,13 @@ int setDebug(const char *data) {
         isDebug = false;
     }
     
-    texecom.setDebug(isDebug);
+    Texecom.setDebug(isDebug);
     
     return 0;
 }
 
 int setUDL(const char *data) {
-    texecom.setUDLCode(data);
+    Texecom.setUDLCode(data);
     return 0;
 }
 
@@ -229,7 +232,10 @@ void setup() {
     Log.info("Boot complete. Reset count = %d", resetCount);
 
     connectToMQTT();
-    texecom.setup();
+
+    Texecom.setAlarmCallback(alarmCallback);
+    Texecom.setZoneCallback(zoneCallback);
+    Texecom.setup();
 
     uint32_t resetReasonData = System.resetReasonData();
     Particle.publish("pushover", String::format("ArgonAlarm: I am awake!: %d-%d", System.resetReason(), resetReasonData), PRIVATE);
@@ -243,6 +249,7 @@ void loop() {
         connectToMQTT();
     }
 
-    texecom.loop();
+    Texecom.loop();
+
     wd.checkin();  // resets the AWDT count
 }

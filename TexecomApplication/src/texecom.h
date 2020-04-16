@@ -12,7 +12,7 @@
 #define firstZone 9 // Zone 1 = 1
 #define zoneCount 11 // 1 == 1
 
-class Texecom {
+class TexecomClass {
  public:
 
     struct SAVE_DATA {
@@ -118,21 +118,36 @@ class Texecom {
     } PROTOCOL;
 
  public:
-    Texecom(void (*alarmCallback)(Texecom::ALARM_STATE, uint8_t), void (*zoneCallback)(uint8_t, uint8_t));
+    TexecomClass();
+    void setZoneCallback(void (*zoneCallback)(uint8_t, uint8_t));
+    void setAlarmCallback(void (*alarmCallback)(TexecomClass::ALARM_STATE, uint8_t));
     SimpleHelper simpleHelper;
     CrestronHelper crestronHelper;
     void setup();
     void loop();
-    void disarm(const char *code);
-    void arm(const char *code, ARM_TYPE type);
     void setDebug(bool enabled);
     bool isReady() { return statePinAreaReady == LOW; }
     ALARM_STATE getState() { return alarmState; }
     void updateAlarmState();
     void sendTest(const  char *text);
     void setUDLCode(const char *code);
+
+    void requestTimeSync();
+    static void startTimeSync();
     void syncTime();
+
+    void requestZoneSync();
+    static void startZoneSync();
     void syncZones();
+    
+    void requestDisarm(const char *code);
+    static void startDisarm();
+    void disarm();
+
+    void requestArm(const char *code, ARM_TYPE type);
+    static void startArm();
+    void arm();
+
 
  private:
     void processTask(TASK_STEP_RESULT result);
@@ -143,7 +158,7 @@ class Texecom {
     void zoneCheck(TASK_STEP_RESULT result);
     void abortCrestronTask();
     void (*zoneCallback)(uint8_t, uint8_t);
-    void (*alarmCallback)(Texecom::ALARM_STATE, uint8_t);
+    void (*alarmCallback)(TexecomClass::ALARM_STATE, uint8_t);
     void delayCommand(CrestronHelper::CRESTRON_COMMAND command, int delay);
     void decodeZoneState(char *message);
     void updateZoneState(uint8_t zone);
@@ -252,5 +267,7 @@ class Texecom {
     bool statePinFaultPresent = HIGH;
     bool statePinAreaReady = HIGH;
 };
+
+extern TexecomClass Texecom;  // make an instance for the user
 
 #endif  // __TEXECOM_H_

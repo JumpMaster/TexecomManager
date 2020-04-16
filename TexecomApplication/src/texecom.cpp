@@ -1,13 +1,24 @@
 // Copyright 2019 Kevin Cooper
 
 #include "texecom.h"
+#include "TimeAlarms.h"
 
-Texecom::Texecom(void (*alarmCallback)(Texecom::ALARM_STATE, uint8_t), void (*zoneCallback)(uint8_t, uint8_t)) {
+TexecomClass::TexecomClass() {}
+
+void TexecomClass::setZoneCallback(void (*zoneCallback)(uint8_t, uint8_t)) {
     this->zoneCallback = zoneCallback;
+}
+
+void TexecomClass::setAlarmCallback(void (*alarmCallback)(TexecomClass::ALARM_STATE, uint8_t)) {
     this->alarmCallback = alarmCallback;
 }
 
-void Texecom::setUDLCode(const char *code) {
+void TexecomClass::setDebug(bool enabled) {
+    savedData.isDebug = enabled;
+    EEPROM.put(0, savedData);
+}
+
+void TexecomClass::setUDLCode(const char *code) {
     if (strlen(code) == 6) {
         strcpy(savedData.udlCode, code);
         EEPROM.put(0, savedData);
@@ -15,63 +26,91 @@ void Texecom::setUDLCode(const char *code) {
     Log.info("New UDL code = %s", savedData.udlCode);
 }
 
-void Texecom::syncTime() {
+void TexecomClass::requestTimeSync() { Alarm.timerOnce(1, startTimeSync); }
+
+void TexecomClass::startTimeSync() { Texecom.syncTime(); }
+
+void TexecomClass::syncTime() {
     simpleTask = SIMPLE_CHECK_TIME;
     taskStep = SIMPLE_LOGIN_REQUIRED;
     simpleLogin(RESULT_NONE);
 }
 
-void Texecom::syncZones() {
+void TexecomClass::requestZoneSync() { Alarm.timerOnce(1, startZoneSync); }
+
+void TexecomClass::startZoneSync() { Texecom.syncZones(); }
+
+void TexecomClass::syncZones() {
     simpleTask = SIMPLE_ZONE_CHECK;
     taskStep = SIMPLE_LOGIN_REQUIRED;
-    simpleLogin(RESULT_NONE);   
+    simpleLogin(RESULT_NONE);
 }
 
-void Texecom::setDebug(bool enabled) {
-    savedData.isDebug = enabled;
-    EEPROM.put(0, savedData);
-}
-
-void Texecom::disarm(const char *code) {
-    if (crestronTask != CRESTRON_IDLE) {
+void TexecomClass::requestDisarm(const char *code) {
+    if (strlen(userPin) > 0) {
         Log.info("DISARMING: Request already in progress");
         return;
     }
+
     if (strlen(code) <= 8)
         snprintf(userPin, sizeof(userPin), code);
     else
         return;
+
+    Alarm.timerOnce(1, startDisarm);
+}
+
+void TexecomClass::startDisarm() {
+    Texecom.disarm();
+}
+
+void TexecomClass::disarm() {
     crestronTask = CRESTRON_DISARM;
     taskStep = CRESTRON_START;
     disarmSystem(RESULT_NONE);
 }
 
-void Texecom::arm(const char *code, ARM_TYPE type) {
-    if (crestronTask != CRESTRON_IDLE) {
+void TexecomClass::requestArm(const char *code, ARM_TYPE type) {
+    if (strlen(userPin) > 0) {
         Log.info("ARMING: Request already in progress");
         return;
     }
+
     if (strlen(code) <= 8)
         snprintf(userPin, sizeof(userPin), code);
     else
         return;
+
     armType = type;
+    Alarm.timerOnce(1, startArm);
+}
+
+void TexecomClass::startArm() {
+    Texecom.arm();
+}
+
+void TexecomClass::arm() {
     crestronTask = CRESTRON_ARM;
     taskStep = CRESTRON_START;
     armSystem(RESULT_NONE);
 }
 
-void Texecom::delayCommand(CrestronHelper::CRESTRON_COMMAND command, int delay) {
+void TexecomClass::delayCommand(CrestronHelper::CRESTRON_COMMAND command, int delay) {
     delayedCommand = command;
     delayedCommandExecuteTime = millis() + delay;
 }
 
-void Texecom::updateAlarmState() {
+void TexecomClass::updateAlarmState() {
     lastStateChange = millis();
-    alarmCallback(alarmState, alarmStateFlags);
+    if (alarmCallback)
+        alarmCallback(alarmState, alarmStateFlags);
+    
+    if (alarmState == TRIGGERED) {
+        Alarm.timerOnce(1, startZoneSync);
+    }
 }
 
-void Texecom::decodeZoneState(char *message) {
+void TexecomClass::decodeZoneState(char *message) {
     uint8_t zone;
     uint8_t state;
 
@@ -96,11 +135,12 @@ void Texecom::decodeZoneState(char *message) {
     updateZoneState(zone);
 }
 
-void Texecom::updateZoneState(uint8_t zone) {
-    zoneCallback(zone+firstZone, zoneStates[zone]);
+void TexecomClass::updateZoneState(uint8_t zone) {
+    if (zoneCallback)
+        zoneCallback(zone+firstZone, zoneStates[zone]);
 }
 
-void Texecom::processTask(TASK_STEP_RESULT result) {
+void TexecomClass::processTask(TASK_STEP_RESULT result) {
     if (result == CRESTRON_TASK_TIMEOUT)
         Log.info("processTask: Task timed out");
 
@@ -121,7 +161,7 @@ void Texecom::processTask(TASK_STEP_RESULT result) {
     }
 }
 
-void Texecom::disarmSystem(TASK_STEP_RESULT result) {
+void TexecomClass::disarmSystem(TASK_STEP_RESULT result) {
     switch (taskStep) {
         case CRESTRON_START :
             disarmStartTime = millis();
@@ -202,6 +242,7 @@ void Texecom::disarmSystem(TASK_STEP_RESULT result) {
                 crestronTask = CRESTRON_IDLE;
                 memset(userPin, 0, sizeof userPin);
                 disarmStartTime = 0;
+                Alarm.completeTriggeredAlarm();
             } else {
                 Log.info("DISARMING: Unexpected result at DISARM_REQUESTED. Aborting");
                 abortCrestronTask();
@@ -213,7 +254,7 @@ void Texecom::disarmSystem(TASK_STEP_RESULT result) {
         abortCrestronTask();
 }
 
-void Texecom::armSystem(TASK_STEP_RESULT result) {
+void TexecomClass::armSystem(TASK_STEP_RESULT result) {
     switch (taskStep) {
         case CRESTRON_START :  // Initiate request
             if (armType == FULL_ARM)
@@ -322,6 +363,7 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
                 crestronTask = CRESTRON_IDLE;
                 memset(userPin, 0, sizeof userPin);
                 armStartTime = 0;
+                Alarm.completeTriggeredAlarm();
             } else {
                 Log.info("ARMING: Unexpected result at ARM_REQUESTED. Aborting");
                 abortCrestronTask();
@@ -333,7 +375,7 @@ void Texecom::armSystem(TASK_STEP_RESULT result) {
         abortCrestronTask();
 }
 
-void Texecom::simpleLogin(TASK_STEP_RESULT result) {
+void TexecomClass::simpleLogin(TASK_STEP_RESULT result) {
     switch (taskStep) {
         case SIMPLE_LOGIN_REQUIRED :  // Initiate request
             if (activeProtocol != SIMPLE) {
@@ -362,7 +404,7 @@ void Texecom::simpleLogin(TASK_STEP_RESULT result) {
     }
 }
 
-void Texecom::checkTime(TASK_STEP_RESULT result) {
+void TexecomClass::checkTime(TASK_STEP_RESULT result) {
     switch (taskStep) {
         case SIMPLE_START :
             Log.info("Requesting time");
@@ -402,6 +444,7 @@ void Texecom::checkTime(TASK_STEP_RESULT result) {
                 Log.info("Logout confirmed");
                 activeProtocol = CRESTRON;
                 simpleTask = SIMPLE_IDLE;
+                Alarm.completeTriggeredAlarm();
             } else {
                 Log.info("Uh oh Time 2 - %d", result);
             }
@@ -409,7 +452,7 @@ void Texecom::checkTime(TASK_STEP_RESULT result) {
     }
 }
 
-void Texecom::zoneCheck(TASK_STEP_RESULT result) {
+void TexecomClass::zoneCheck(TASK_STEP_RESULT result) {
     switch (taskStep) {
         case SIMPLE_START :
             Log.info("Requesting Zone state");
@@ -432,6 +475,7 @@ void Texecom::zoneCheck(TASK_STEP_RESULT result) {
                 Log.info("Logout confirmed");
                 activeProtocol = CRESTRON;
                 simpleTask = SIMPLE_IDLE;
+                Alarm.completeTriggeredAlarm();
             } else {
                 Log.info("Uh oh 3 - %d", result);
             }
@@ -439,7 +483,7 @@ void Texecom::zoneCheck(TASK_STEP_RESULT result) {
     }
 }
 
-void Texecom::abortCrestronTask() {
+void TexecomClass::abortCrestronTask() {
     crestronTask = CRESTRON_IDLE;
     texSerial.println("KEYR");
     delayedCommandExecuteTime = 0;
@@ -448,11 +492,11 @@ void Texecom::abortCrestronTask() {
     armStartTime = 0;
     disarmStartTime = 0;
     crestronHelper.requestArmState();
-
     commandAttempts = 0;
+    Alarm.completeTriggeredAlarm();
 }
 
-bool Texecom::processCrestronMessage(char *message, uint8_t messageLength) {
+bool TexecomClass::processCrestronMessage(char *message, uint8_t messageLength) {
 
     // Zone state changed
     if (messageLength == 6 &&
@@ -586,7 +630,7 @@ bool Texecom::processCrestronMessage(char *message, uint8_t messageLength) {
     return false;
 }
 
-bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
+bool TexecomClass::processSimpleMessage(char *message, uint8_t messageLength) {
 
     if (strncmp(message, "OK", 2) == 0) {
         if (simpleTask != SIMPLE_IDLE) {
@@ -609,7 +653,7 @@ bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
         simpleHelper.processReceivedZoneData(message, messageLength, zoneStates);
 
         for (uint8_t i = 0; i < zoneCount; i++)
-            zoneCallback(i+firstZone, zoneStates[i]);
+            updateZoneState(i);
 
         processTask(SIMPLE_OK);
         return true;
@@ -619,7 +663,7 @@ bool Texecom::processSimpleMessage(char *message, uint8_t messageLength) {
     return false;
 }
 
-void Texecom::checkDigiOutputs() {
+void TexecomClass::checkDigiOutputs() {
     bool changeDetected = false;
 
     bool _state = digitalRead(pinFullArmed);
@@ -627,9 +671,9 @@ void Texecom::checkDigiOutputs() {
     if (_state != statePinFullArmed) {
         changeDetected = true;
         statePinFullArmed = _state;
-        if (_state == LOW)
+        if (_state == LOW) {
             alarmState = ARMED_AWAY;
-        else {
+        } else {
             alarmState = DISARMED;
             if (crestronTask != CRESTRON_IDLE) {
                 processTask(CRESTRON_IS_DISARMED);
@@ -642,9 +686,9 @@ void Texecom::checkDigiOutputs() {
     if (_state != statePinPartArmed) {
         changeDetected = true;
         statePinPartArmed = _state;
-        if (_state == LOW)
+        if (_state == LOW) {
             alarmState = ARMED_HOME;
-        else {
+        } else {
             alarmState = DISARMED;
             if (crestronTask != CRESTRON_IDLE) {
                 processTask(CRESTRON_IS_DISARMED);
@@ -657,8 +701,9 @@ void Texecom::checkDigiOutputs() {
     if (_state != statePinEntry) {
         changeDetected = true;
         statePinEntry = _state;
-        if (_state == LOW)
+        if (_state == LOW) {
             alarmState = PENDING;
+        }
     }
 
     _state = digitalRead(pinExiting);
@@ -679,8 +724,9 @@ void Texecom::checkDigiOutputs() {
     if (_state != statePinTriggered) {
         changeDetected = true;
         statePinTriggered = _state;
-        if (_state == LOW)
+        if (_state == LOW) {
             alarmState = TRIGGERED;
+        }
     }
 
     _state = digitalRead(pinAreaReady);
@@ -689,10 +735,11 @@ void Texecom::checkDigiOutputs() {
         changeDetected = true;
         statePinAreaReady = _state;
 
-        if (statePinAreaReady == LOW)
+        if (statePinAreaReady == LOW) {
             alarmStateFlags |= ALARM_READY;
-        else
+        } else {
             alarmStateFlags &= ~ALARM_READY;
+        }
     }
 
     _state = digitalRead(pinFaultPresent);
@@ -730,9 +777,9 @@ void Texecom::checkDigiOutputs() {
 
 }
 
-void Texecom::setup() {
+void TexecomClass::setup() {
     texSerial.begin(19200, SERIAL_8N2);  // open serial communications
-    
+
     pinMode(pinFullArmed, INPUT);
     pinMode(pinPartArmed, INPUT);
     pinMode(pinEntry, INPUT);
@@ -746,11 +793,14 @@ void Texecom::setup() {
 
     if (savedData.isDebug)
         Log.info("UDL code = %s", savedData.udlCode);
-    
+
+    Alarm.timerRepeat(180, Texecom.startZoneSync);
+    Alarm.alarmRepeat(3, 0, 0, Texecom.startTimeSync);
+
     checkDigiOutputs();
 }
 
-void Texecom::loop() {
+void TexecomClass::loop() {
     bool messageReady = false;
     bool messageComplete = true;
     uint8_t messageLength = 0;
@@ -926,5 +976,10 @@ void Texecom::loop() {
             Log.info("Simple logout failed and was forced");
         }
     }
+
     checkDigiOutputs();
+    Alarm.loop();
 }
+
+// make one instance for the user to use
+TexecomClass Texecom = TexecomClass();
