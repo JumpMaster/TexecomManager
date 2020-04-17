@@ -55,7 +55,7 @@ void alarmCallback(TexecomClass::ALARM_STATE state, uint8_t flags) {
                 (flags & TexecomClass::ALARM_ARM_FAILED) != 0);
 
 
-    mqttClient.publish("home/security/alarm", message, MQTT::QOS2, true);
+    mqttClient.publish("home/security/alarm", message, true);
 }
 
 void zoneCallback(uint8_t zone, uint8_t state) {

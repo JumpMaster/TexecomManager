@@ -41,8 +41,8 @@ class TexecomClass {
         DISARMED = 0,
         ARMED_HOME = 1,
         ARMED_AWAY = 2,
-        PENDING = 3,
-        ARMING = 4,
+        ENTRY = 3,
+        EXIT = 4,
         TRIGGERED = 5,
     } ALARM_STATE;
 
@@ -227,7 +227,8 @@ class TexecomClass {
     uint32_t nextPinEntryTime;
     const int PIN_ENTRY_DELAY = 500;
     ALARM_STATE alarmState = DISARMED;
-    uint32_t lastStateChange;
+    // uint32_t lastStateChange;
+    uint32_t exitToDisarmTimeout = 0;
     const int armingTimeout = 45000;
 
     uint32_t messageStart;
@@ -242,7 +243,7 @@ class TexecomClass {
 //  Digi Output - Argon Pin - Texecom Configuration
 //  1 ----------------- D12 - 22 Full Armed
 //  2 ----------------- D16 - 23 Part Armed
-//  3 ----------------- D13 - 19 Exiting
+//  3 ----------------- D13 - 19 Exit
 //  4 ----------------- D17 - 17 Entry
 //  5 ----------------- D14 - 00 Alarm
 //  6 ----------------- D18 - 27 Arm Failed
@@ -251,7 +252,7 @@ class TexecomClass {
 
     const int pinFullArmed = D12;
     const int pinPartArmed = D16;
-    const int pinExiting = D13;
+    const int pinExit = D13;
     const int pinEntry = D17;
     const int pinTriggered = D14;
     const int pinArmFailed = D18;
@@ -261,7 +262,7 @@ class TexecomClass {
     bool statePinFullArmed = LOW;
     bool statePinPartArmed = LOW;
     bool statePinEntry = LOW;
-    bool statePinExiting = LOW;
+    bool statePinExit = LOW;
     bool statePinTriggered = LOW;
     bool statePinArmFailed = HIGH;
     bool statePinFaultPresent = HIGH;
