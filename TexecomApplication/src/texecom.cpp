@@ -472,12 +472,12 @@ void TexecomClass::zoneCheck(TASK_STEP_RESULT result) {
         case SIMPLE_LOGOUT :
             if (result == SIMPLE_OK) {
                 Log.info("ZONE: Logout confirmed");
-                activeProtocol = CRESTRON;
-                simpleTask = SIMPLE_IDLE;
-                Alarm.completeTriggeredAlarm();
             } else {
-                Log.info("ZONE: Uh oh 3 - %d", result);
+                Log.info("ZONE: Uh oh 1 - %d", result);
             }
+            activeProtocol = CRESTRON;
+            simpleTask = SIMPLE_IDLE;
+            Alarm.completeTriggeredAlarm();
             break;
     }
 }
@@ -798,6 +798,17 @@ void TexecomClass::checkDigiOutputs() {
     if (changeDetected) {
         // lastStateChange = millis();
         updateAlarmState();
+        /*
+        Log.info("FA:%d PA:%d EN:%d EX:%d TR:%d AR:%d FP:%d AF:%d",
+            statePinFullArmed,
+            statePinPartArmed,
+            statePinEntry,
+            statePinExit,
+            statePinTriggered,
+            statePinAreaReady,
+            statePinFaultPresent,
+            statePinArmFailed);
+        */
     }
 
 }
@@ -1002,6 +1013,7 @@ void TexecomClass::loop() {
         } else {
             activeProtocol = CRESTRON;
             simpleTask = SIMPLE_IDLE;
+            Alarm.completeTriggeredAlarm();
             Log.info("SIMPLE: Simple logout failed and was forced");
         }
     }

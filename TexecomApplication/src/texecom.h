@@ -226,7 +226,7 @@ class TexecomClass {
     uint8_t loginPinPosition;
     uint32_t nextPinEntryTime;
     const int PIN_ENTRY_DELAY = 500;
-    ALARM_STATE alarmState = DISARMED;
+    ALARM_STATE alarmState = ARMED_AWAY;
     // uint32_t lastStateChange;
     uint32_t exitToDisarmTimeout = 0;
     const int armingTimeout = 45000;
@@ -259,14 +259,14 @@ class TexecomClass {
     const int pinFaultPresent = D15;
     const int pinAreaReady = D19;
 
-    bool statePinFullArmed = LOW;
-    bool statePinPartArmed = LOW;
-    bool statePinEntry = LOW;
-    bool statePinExit = LOW;
-    bool statePinTriggered = LOW;
+    bool statePinFullArmed = HIGH;
+    bool statePinPartArmed = HIGH;
+    bool statePinEntry = HIGH;
+    bool statePinExit = HIGH;
+    bool statePinTriggered = HIGH;
     bool statePinArmFailed = HIGH;
     bool statePinFaultPresent = HIGH;
-    bool statePinAreaReady = HIGH;
+    bool statePinAreaReady = LOW;
 };
 
 extern TexecomClass Texecom;  // make an instance for the user
