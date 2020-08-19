@@ -6,6 +6,7 @@
 #include "Particle.h"
 #include "secrets.h"
 #include "TimeAlarms.h"
+#include "DiagnosticsHelperRK.h"
 
 // Stubs
 void mqttCallback(char* topic, byte* payload, unsigned int length);
@@ -15,19 +16,35 @@ void zoneCallback(uint8_t zone, uint8_t state);
 void publishAlarmState(TexecomClass::ALARM_STATE newState);
 void updateZoneState(uint8_t zone, uint8_t state);
 
-ApplicationWatchdog wd(60000, System.reset);
-
 MQTT mqttClient(mqttServer, 1883, mqttCallback);
 uint32_t lastMqttConnectAttempt;
 const int mqttConnectAtemptTimeout1 = 5000;
 const int mqttConnectAtemptTimeout2 = 30000;
 unsigned int mqttConnectionAttempts;
 bool mqttStateConfirmed = true;
-uint32_t resetTime = 0;
+
 bool isDebug = false;
+uint32_t resetTime = 0;
 retained uint32_t lastHardResetTime;
 retained int resetCount;
 TexecomClass::ALARM_STATE alarmState;
+
+#define WATCHDOG_TIMEOUT_MS 30*1000
+
+#define WDT_RREN_REG 0x40010508
+#define WDT_CRV_REG 0x40010504
+#define WDT_REG 0x40010000
+void WatchDoginitialize() {
+    *(uint32_t *) WDT_RREN_REG = 0x00000001;
+    *(uint32_t *) WDT_CRV_REG = (uint32_t) (WATCHDOG_TIMEOUT_MS * 32.768);
+    *(uint32_t *) WDT_REG = 0x00000001;
+}
+
+#define WDT_RR0_REG 0x40010600
+#define WDT_RELOAD 0x6E524635
+void WatchDogpet() {
+    *(uint32_t *) WDT_RR0_REG = WDT_RELOAD;
+}
 
 PapertrailLogHandler papertrailHandler(papertrailAddress, papertrailPort,
   "ArgonTexecom", System.deviceID(),
@@ -184,6 +201,24 @@ void connectToMQTT() {
     }
 }
 
+uint32_t nextMetricsUpdate = 0;
+void sendTelegrafMetrics() {
+    if (millis() > nextMetricsUpdate) {
+        nextMetricsUpdate = millis() + 30000;
+
+        char buffer[150];
+        snprintf(buffer, sizeof(buffer),
+            "status,device=Texecom uptime=%d,resetReason=%d,firmware=\"%s\",memTotal=%ld,memFree=%ld",
+            System.uptime(),
+            System.resetReason(),
+            System.version().c_str(),
+            DiagnosticsHelper::getValue(DIAG_ID_SYSTEM_TOTAL_RAM),
+            DiagnosticsHelper::getValue(DIAG_ID_SYSTEM_USED_RAM)
+            );
+        mqttClient.publish("telegraf/particle", buffer);
+    }
+}
+
 void random_seed_from_cloud(unsigned seed) {
     srand(seed);
 }
@@ -197,7 +232,7 @@ void startupMacro() {
 STARTUP(startupMacro());
 
 void setup() {
-    
+
     waitFor(Particle.connected, 30000);
     
     do {
@@ -217,6 +252,8 @@ void setup() {
         if (resetCount > 3) {
             System.enterSafeMode();
         }
+    } else if (System.resetReason() == RESET_REASON_WATCHDOG) {
+      Log.info("RESET BY WATCHDOG");
     } else {
         resetCount = 0;
     }
@@ -228,6 +265,8 @@ void setup() {
     Particle.variable("isDebug", isDebug);
     Particle.variable("reset-time", resetTime);
     Particle.publishVitals(900);
+
+    WatchDoginitialize();
 
     Log.info("Boot complete. Reset count = %d", resetCount);
 
@@ -244,6 +283,7 @@ void setup() {
 void loop() {
     if (mqttClient.isConnected()) {
         mqttClient.loop();
+        sendTelegrafMetrics();
     } else if ((mqttConnectionAttempts < 5 && millis() > (lastMqttConnectAttempt + mqttConnectAtemptTimeout1)) ||
                  millis() > (lastMqttConnectAttempt + mqttConnectAtemptTimeout2)) {
         connectToMQTT();
@@ -251,5 +291,5 @@ void loop() {
 
     Texecom.loop();
 
-    wd.checkin();  // resets the AWDT count
+    WatchDogpet();
 }
